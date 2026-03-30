@@ -1,0 +1,55 @@
+{
+    "_description": "Chiplet-based Dojo-style Prefill-Decode Disaggregated Serving Configuration. 2 Prefill pools and 1 Decode pool (TP=4) on a single node.",
+    "num_nodes": 1,
+    "link_bw": 32,
+    "link_latency": 0,
+    "nodes": [
+        {
+            "num_instances": 3,
+            "cpu_mem": {
+                "mem_size": 512,
+                "mem_bw": 256,
+                "mem_latency": 0
+            },
+            "instances": [
+                {
+                    "model_name": "meta-llama/Llama-3.1-8B",
+                    "hardware": "WSC-LLM",
+                    "npu_mem": {
+                        "mem_size": 32,
+                        "mem_bw": 3350,
+                        "mem_latency": 0
+                    },
+                    "npu_num": 4,
+                    "npu_group": 1,
+                    "pd_type": "prefill"
+                },
+                {
+                    "_comment": "Repeat this decode block 6 times to model 6 decode chiplets",
+                    "model_name": "meta-llama/Llama-3.1-8B",
+                    "hardware": "WSC-LLM",
+                    "npu_mem": {
+                        "mem_size": 32,
+                        "mem_bw": 3350,
+                        "mem_latency": 0
+                    },
+                    "npu_num": 4,
+                    "npu_group": 1,
+                    "pd_type": "decode"
+                },
+                {
+                    "model_name": "meta-llama/Llama-3.1-8B",
+                    "hardware": "WSC-LLM",
+                    "npu_mem": {
+                        "mem_size": 32,
+                        "mem_bw": 3350,
+                        "mem_latency": 0
+                    },
+                    "npu_num": 4,
+                    "npu_group": 1,
+                    "pd_type": "prefill"
+                }
+            ]
+        }
+    ]
+}
