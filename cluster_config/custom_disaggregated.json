@@ -1,5 +1,5 @@
 {
-    "_description": "Chiplet-based Dojo-style Prefill-Decode Disaggregated Serving Configuration. 2 Prefill pools and 1 Decode pool (TP=4). 3 nodes to model 2-hop D2D KV transfer latency between P and D pools.",
+    "_description": "Chiplet-based Dojo-style Prefill-Decode Disaggregated Serving. 2 Prefill pools + 1 Decode pool, each TP=4. 3 nodes to model 2-hop D2D KV transfer latency.",
     "num_nodes": 3,
     "link_bw": 32,
     "link_latency": 800,
@@ -21,7 +21,7 @@
                         "mem_latency": 0
                     },
                     "npu_num": 4,
-                    "npu_group": 4,
+                    "npu_group": 1,
                     "pd_type": "prefill"
                 }
             ]
@@ -43,7 +43,7 @@
                         "mem_latency": 0
                     },
                     "npu_num": 4,
-                    "npu_group": 4,
+                    "npu_group": 1,
                     "pd_type": "decode"
                 }
             ]
@@ -65,7 +65,7 @@
                         "mem_latency": 0
                     },
                     "npu_num": 4,
-                    "npu_group": 4,
+                    "npu_group": 1,
                     "pd_type": "prefill"
                 }
             ]
