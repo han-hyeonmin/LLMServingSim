@@ -25,6 +25,7 @@ up_proj,2,0,4,2826
 act_fn,2,0,4,3578
 down_proj,2,0,4,2840
 final_layernorm,2,0,4,21961
+o_proj,2,0,4,17144
 embedding,3,0,4,3778
 input_layernorm,3,0,4,20965
 q_proj,3,0,4,2102
@@ -37,6 +38,7 @@ up_proj,3,0,4,2896
 act_fn,3,0,4,3381
 down_proj,3,0,4,2897
 final_layernorm,3,0,4,21533
+o_proj,3,0,4,17385
 embedding,4,0,4,4375
 input_layernorm,4,0,4,22300
 q_proj,4,0,4,2102
@@ -49,6 +51,7 @@ up_proj,4,0,4,2954
 act_fn,4,0,4,3494
 down_proj,4,0,4,2954
 final_layernorm,4,0,4,22927
+o_proj,4,0,4,17627
 embedding,5,0,4,5085
 input_layernorm,5,0,4,21831
 q_proj,5,0,4,2130
@@ -60,6 +63,7 @@ gate_proj,5,0,4,3068
 up_proj,5,0,4,3054
 act_fn,5,0,4,3720
 final_layernorm,5,0,4,22641
+o_proj,5,0,4,17868
 embedding,6,0,4,5710
 input_layernorm,6,0,4,21973
 q_proj,6,0,4,2130
@@ -71,6 +75,7 @@ gate_proj,6,0,4,3153
 up_proj,6,0,4,3152
 act_fn,6,0,4,3465
 final_layernorm,6,0,4,22756
+o_proj,6,0,4,18110
 embedding,7,0,4,6277
 input_layernorm,7,0,4,22044
 q_proj,7,0,4,2130
@@ -82,6 +87,7 @@ gate_proj,7,0,4,3181
 up_proj,7,0,4,3153
 act_fn,7,0,4,3494
 final_layernorm,7,0,4,22868
+o_proj,7,0,4,18351
 embedding,8,0,4,6931
 input_layernorm,8,0,4,24417
 q_proj,8,0,4,2159
@@ -93,6 +99,7 @@ gate_proj,8,0,4,3238
 up_proj,8,0,4,3209
 act_fn,8,0,4,3664
 final_layernorm,8,0,4,24644
+o_proj,8,0,4,18593
 embedding,9,0,4,7698
 input_layernorm,9,0,4,23748
 q_proj,9,0,4,2187
@@ -104,6 +111,7 @@ gate_proj,9,0,4,3281
 up_proj,9,0,4,3238
 act_fn,9,0,4,3721
 final_layernorm,9,0,4,24175
+o_proj,9,0,4,18834
 embedding,10,0,4,8295
 input_layernorm,10,0,4,23835
 q_proj,10,0,4,2187
@@ -115,6 +123,7 @@ gate_proj,10,0,4,3295
 up_proj,10,0,4,3267
 act_fn,10,0,4,3608
 final_layernorm,10,0,4,24431
+o_proj,10,0,4,19076
 embedding,11,0,4,8920
 input_layernorm,11,0,4,23962
 q_proj,11,0,4,2215
@@ -126,6 +135,7 @@ gate_proj,11,0,4,3352
 up_proj,11,0,4,3323
 act_fn,11,0,4,3664
 final_layernorm,11,0,4,24517
+o_proj,11,0,4,19317
 embedding,12,0,4,9530
 input_layernorm,12,0,4,24062
 q_proj,12,0,4,2215
@@ -137,6 +147,7 @@ gate_proj,12,0,4,3409
 up_proj,12,0,4,3352
 act_fn,12,0,4,3720
 final_layernorm,12,0,4,24601
+o_proj,12,0,4,19559
 embedding,13,0,4,10284
 input_layernorm,13,0,4,24032
 q_proj,13,0,4,2230
@@ -148,6 +159,7 @@ gate_proj,13,0,4,3437
 up_proj,13,0,4,3409
 act_fn,13,0,4,3948
 final_layernorm,13,0,4,24714
+o_proj,13,0,4,19800
 embedding,14,0,4,10994
 input_layernorm,14,0,4,24261
 q_proj,14,0,4,2244
@@ -159,6 +171,7 @@ gate_proj,14,0,4,3494
 up_proj,14,0,4,3465
 act_fn,14,0,4,3750
 final_layernorm,14,0,4,24743
+o_proj,14,0,4,20042
 embedding,15,0,4,11477
 input_layernorm,15,0,4,24361
 q_proj,15,0,4,2244
@@ -170,6 +183,7 @@ gate_proj,15,0,4,3522
 up_proj,15,0,4,3494
 act_fn,15,0,4,3820
 final_layernorm,15,0,4,24984
+o_proj,15,0,4,20283
 embedding,16,0,4,12074
 input_layernorm,16,0,4,28138
 q_proj,16,0,4,2244
@@ -182,6 +196,7 @@ up_proj,16,0,4,3522
 act_fn,16,0,4,3863
 final_layernorm,16,0,4,28452
 lm_head,16,0,4,412516
+o_proj,16,0,4,20525
 embedding,17,0,4,3210
 input_layernorm,17,0,4,27086
 k_proj,17,0,4,15355
