@@ -2,7 +2,7 @@
     "_description": "Chiplet-based Dojo-style Prefill-Decode Disaggregated Serving. 2 Prefill pools + 1 Decode pool, each TP=4. 3 nodes to model 2-hop D2D KV transfer latency.",
     "num_nodes": 3,
     "link_bw": 32,
-    "link_latency": 800,
+    "link_latency": 400,
     "nodes": [
         {
             "num_instances": 1,
