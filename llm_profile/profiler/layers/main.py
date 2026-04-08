@@ -53,6 +53,7 @@ def parse_args():
     # Which stages to run
     parser.add_argument("--legacy", action="store_true", help="Use legacy attention with no prediction (not recommended)")
 
+    return parser.parse_args()
 
 
 def _create_past_key_values(config, kv_len, device):
