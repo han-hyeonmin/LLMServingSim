@@ -144,9 +144,6 @@ def main():
     else:
         print(f"[WARN] Sort column '{args.sort_by}' not found; skipping sort.")
 
-    # Remove req_id column
-    result_df.drop(columns=["request id"], inplace=True)
-
     # --- Output path ---
     out_path = args.output or (
         args.input_csv.parent / (args.input_csv.stem + "_converted.csv")

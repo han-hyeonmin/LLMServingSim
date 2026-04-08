@@ -5,8 +5,9 @@ Usage:
     python dataset/azurepublicdataset/azure_trace_parser.py conv
     python dataset/azurepublicdataset/azure_trace_parser.py code --max-requests 100
     python dataset/azurepublicdataset/azure_trace_parser.py conv --max-input-tokens 4096
+    python dataset/azurepublicdataset/azure_trace_parser.py conv --all-arrives-at-0
 
-Output: dataset/azure_trace_{conv|code}[_reqN]_llama.jsonl
+Output: dataset/azure_trace_{conv|code}[_reqN][_all_arrives_at_0]_llama.jsonl
 """
 
 import os
@@ -53,10 +54,14 @@ CSV_FILES = {
 }
 
 
-def build_output_path(key: str, max_requests) -> str:
-    """Build output .jsonl path. e.g. conv, 100 → azure_trace_conv_req100_llama.jsonl"""
+def build_output_path(key: str, max_requests, all_arrives_at_0: bool) -> str:
+    """Build output .jsonl path.
+    e.g. conv, 100, True  → azure_trace_conv_req100_all_arrives_at_0_llama.jsonl
+         conv, None, False → azure_trace_conv_llama.jsonl
+    """
     req_tag = f"_req{max_requests}" if max_requests is not None else ""
-    filename = f"azure_trace_{key}{req_tag}_{TOKENIZER_SUFFIX}.jsonl"
+    zero_tag = "_all_arrives_at_0" if all_arrives_at_0 else ""
+    filename = f"azure_trace_{key}{req_tag}{zero_tag}_{TOKENIZER_SUFFIX}.jsonl"
     return os.path.join(DATASET_DIR, filename)
 
 
@@ -66,6 +71,7 @@ def convert_csv_to_jsonl(
     max_requests,
     max_input_tokens: int,
     max_total_tokens: int,
+    all_arrives_at_0: bool = False,
 ) -> None:
     print(f"\nLoading CSV: {csv_path}")
     df = pd.read_csv(csv_path)
@@ -74,9 +80,14 @@ def convert_csv_to_jsonl(
     df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL])
     df = df.sort_values(by=TIMESTAMP_COL).reset_index(drop=True)
     first_time = df[TIMESTAMP_COL].iloc[0]
-    df["arrival_time_ns"] = (
-        (df[TIMESTAMP_COL] - first_time).dt.total_seconds() * 1_000_000_000
-    ).astype(int)
+    if all_arrives_at_0:
+        df["arrival_time_ns"] = 0
+        print("  arrival_time_ns   = 0 (all_arrives_at_0 flag enabled)")
+    else:
+        df["arrival_time_ns"] = (
+            (df[TIMESTAMP_COL] - first_time).dt.total_seconds() * 1_000_000_000
+        ).astype(int)
+        print("  arrival_time_ns   = real relative timestamps")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -171,10 +182,19 @@ def main():
         metavar="N",
         help="Per-request input+output token cap (default: 4096)",
     )
+    parser.add_argument(
+        "--all-arrives-at-0",
+        action="store_true",
+        default=False,
+        help="Set all arrival_time_ns to 0 (batch mode). "
+        "Without this flag, real relative timestamps are used.",
+    )
     args = parser.parse_args()
 
     csv_path = CSV_FILES[args.dataset]
-    output_path = build_output_path(args.dataset, args.max_requests)
+    output_path = build_output_path(
+        args.dataset, args.max_requests, args.all_arrives_at_0
+    )
 
     print(f"Output path: {output_path}")
     convert_csv_to_jsonl(
@@ -183,6 +203,7 @@ def main():
         args.max_requests,
         args.max_input_tokens,
         args.max_total_tokens,
+        all_arrives_at_0=args.all_arrives_at_0,
     )
 
 
