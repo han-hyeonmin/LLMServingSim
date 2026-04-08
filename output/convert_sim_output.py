@@ -5,13 +5,12 @@ Converts LLMServingSim per-request CSV output into a format comparable
 with the benchmark table shown in the reference screenshot.
 
 Reference table columns (from screenshot):
-  L_prefill   : number of input (prefill) tokens
-  L_decode    : number of decode tokens  = output_col - input_col  (out - in)
-  Decode start: time when decode phase begins, in seconds (= arrival + TTFT)
-  Decode end  : time when decode phase ends,   in seconds (= arrival + latency)
-  Decode time : total decode duration in ms    (= latency - TTFT, converted ns→ms)
-  stall_total : total stall time in ms         (= queuing_delay, converted ns→ms)
-  stall_ratio : stall_total / Decode time * 100  (%)
+  L_prefill        : number of input (prefill) tokens
+  L_decode         : number of decode tokens     = output - input
+  Decode start (s) : time when decode phase begins, in seconds (= arrival + TTFT)
+  Decode end (s)   : time when decode phase ends,   in seconds (= end_time)
+  Decode time (ms) : total decode duration in ms               (= Decode end - Decode start, ns→ms)
+  stall_total (ms) : total stall time in ms                    (= queuing_delay, ns→ms)
 
 LLMServingSim output CSV columns (scheduler.py::save_output):
   instance id, request id, model, input, output,
@@ -47,7 +46,7 @@ SIM_COLS = [
 ]
 
 # Columns we actually need for the conversion
-REQUIRED_COLS = {"input", "output", "arrival", "latency", "queuing_delay", "TTFT"}
+REQUIRED_COLS = {"input", "output", "arrival", "end_time", "queuing_delay", "TTFT"}
 
 
 def load_sim_csv(path: Path) -> pd.DataFrame:
@@ -74,12 +73,13 @@ def convert(df: pd.DataFrame) -> pd.DataFrame:
 
     Column derivations
     ------------------
-    request id   = request id                        (carried through for sorting)
-    L_prefill    = input                             (tokens)
-    L_decode     = output - input                    (tokens)  [out-in trick]
-    end_time     = end_time * NS_TO_S                (seconds)
-    latency      = latency * NS_TO_S                 (seconds)
-    stall_total  = queuing_delay      * NS_TO_MS     (ms)
+    request id        = request id                                (carried through for sorting)
+    L_prefill         = input                                     (tokens)
+    L_decode          = output - input                            (tokens)
+    Decode start (s)  = (arrival + TTFT) * NS_TO_S               (seconds, 7 decimal places)
+    Decode end (s)    = end_time * NS_TO_S                        (seconds, 7 decimal places)
+    Decode time (ms)  = (end_time - arrival - TTFT) * NS_TO_MS   (ms, 3 decimal places)
+    stall_total (ms)  = queuing_delay * NS_TO_MS                  (ms)
     """
     out = pd.DataFrame()
 
@@ -87,16 +87,19 @@ def convert(df: pd.DataFrame) -> pd.DataFrame:
     out["L_prefill"] = df["input"].astype(int)
     out["L_decode"] = (df["output"] - df["input"]).astype(int)
 
-    # end_time in seconds
-    out["end_time (s)"] = (df["end_time"] * NS_TO_S).round(7)
+    # Decode start: time when decode phase begins (arrival + TTFT), in seconds
+    out["Decode start (s)"] = ((df["arrival"] + df["TTFT"]) * NS_TO_S).round(7)
 
-    # request latency in seconds
-    out["latency (s)"] = (df["latency"] * NS_TO_S).round(7)
+    # Decode end: time when decode phase ends (end_time), in seconds
+    out["Decode end (s)"] = (df["end_time"] * NS_TO_S).round(7)
 
-    # Decode duration and stall in milliseconds
-    stall_total_ms = df["queuing_delay"] * NS_TO_MS
+    # Decode duration: Decode end - Decode start, in milliseconds
+    out["Decode time (ms)"] = (
+        (df["end_time"] - df["arrival"] - df["TTFT"]) * NS_TO_MS
+    ).round(3)
 
-    out["stall_total (ms)"] = stall_total_ms.round(2)
+    # Stall (queuing delay) in milliseconds
+    out["stall_total (ms)"] = (df["queuing_delay"] * NS_TO_MS).round(2)
 
     return out
 
@@ -106,7 +109,7 @@ def main():
         description=(
             "Convert LLMServingSim per-request CSV output to benchmark comparison format.\n"
             "Computes decode token count (output - input), converts ns→ms/s, "
-            "and calculates stall ratio."
+            "and calculates decode start/end times."
         )
     )
     parser.add_argument(
