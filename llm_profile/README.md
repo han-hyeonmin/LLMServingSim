@@ -24,7 +24,7 @@ See [Extrapolating to a New Hardware Target](#extrapolating-to-a-new-hardware-ta
 
 ### 1. Environment
 
-Run inside the provided Docker container or a native PyTorch + CUDA environment:
+**Option A — Docker (recommended)**
 
 ```bash
 ./docker.sh
@@ -33,17 +33,22 @@ Run inside the provided Docker container or a native PyTorch + CUDA environment:
 For models that require access approval (e.g., LLaMA), provide your Hugging Face token
 as described in `docker.sh`.
 
-> **Non-Docker (server) setup**: If running directly on a server with a conda environment,
-> activate the environment before running any scripts:
->
+> **If using Docker**: `profile_layers.sh`, `profile_attn.sh`, and 'build_predictor.sh'
+> contain conda activation lines (`source .../conda.sh`, `conda activate llm_profile`)
+> at the top. These must be **commented out** when running inside Docker.
+
+**Option B — conda (no Docker)**
+
+```bash
+conda env create -f llm_profile.yml
+conda activate llm_profile
+```
+
+> For models requiring Hugging Face access, set your token once:
 > ```bash
-> source "$(conda info --base)/etc/profile.d/conda.sh"
-> conda activate llm_profile
-> cd /path/to/LLMServingSim/llm_profile
+> conda env config vars set HUGGING_FACE_HUB_TOKEN="hf_..."
+> conda activate llm_profile   # re-activate to apply
 > ```
->
-> Shell scripts in this directory already handle this internally. Do **not** chain
-> `conda activate` using `\` — each command must be on a separate line or use `&&`.
 
 ### 2. Profile layers and attention
 

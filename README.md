@@ -30,12 +30,25 @@ git clone --recurse-submodules https://github.com/han-hyeonmin/LLMServingSim.git
 cd LLMServingSim
 ```
 
-### 2. Run Docker
+### 2. Set up the environment
 
-This will configure and run the Docker environment. See `docker.sh` for details.
+**Option A — Docker (recommended)**
 
 ```bash
 ./docker.sh
+```
+
+See `docker.sh` for details.
+
+> **If using Docker**: `run_custom_pdd.sh` contains conda activation lines
+> (`source .../conda.sh`, `conda activate servingsim`) at the top. These must be
+> **commented out** when running inside Docker, as the Docker environment does not use conda.
+
+**Option B — conda (no Docker)**
+
+```bash
+conda env create -f servingsim.yml
+conda activate servingsim
 ```
 
 ### 3. Build ASTRA-Sim and Chakra
