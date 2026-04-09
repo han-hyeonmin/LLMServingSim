@@ -1,35 +1,16 @@
 """
-convert_sim_output.py
-
-Converts LLMServingSim per-request CSV output into a format comparable
-with the benchmark table shown in the reference screenshot.
-
-Reference table columns (from screenshot):
-  L_prefill        : number of input (prefill) tokens
-  L_decode         : number of decode tokens     = output - input
-  Decode start (s) : time when decode phase begins, in seconds (= arrival + TTFT)
-  Decode end (s)   : time when decode phase ends,   in seconds (= end_time)
-  Decode time (ms) : total decode duration in ms               (= Decode end - Decode start, ns→ms)
-  stall_total (ms) : total stall time in ms                    (= queuing_delay, ns→ms)
-
-LLMServingSim output CSV columns (scheduler.py::save_output):
-  instance id, request id, model, input, output,
-  arrival, end_time, latency, queuing_delay, TTFT, TPOT, ITL
-
-Time unit in LLMServingSim CSV: nanoseconds (ns)
+Convert LLMServingSim per-request CSV output to benchmark comparison format.
+See README.md for column mapping and usage details.
 """
 
 import argparse
 import pandas as pd
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-NS_TO_MS = 1e-6  # nanoseconds  → milliseconds
-NS_TO_S = 1e-9  # nanoseconds  → seconds
+NS_TO_MS = 1e-6  # ns → ms
+NS_TO_S = 1e-9  # ns → s
 
-# Columns emitted by scheduler.py::save_output
+# All columns emitted by scheduler.py::save_output
 SIM_COLS = [
     "instance id",
     "request id",
@@ -45,7 +26,7 @@ SIM_COLS = [
     "ITL",
 ]
 
-# Columns we actually need for the conversion
+# Subset required for conversion
 REQUIRED_COLS = {"input", "output", "arrival", "end_time", "queuing_delay", "TTFT"}
 
 
@@ -66,39 +47,21 @@ def load_sim_csv(path: Path) -> pd.DataFrame:
 
 
 def convert(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Transform LLMServingSim output rows into the benchmark comparison format.
-
-    All LLMServingSim time values are in nanoseconds (ns).
-
-    Column derivations
-    ------------------
-    request id        = request id                                (carried through for sorting)
-    L_prefill         = input                                     (tokens)
-    L_decode          = output - input                            (tokens)
-    Decode start (s)  = (arrival + TTFT) * NS_TO_S               (seconds, 7 decimal places)
-    Decode end (s)    = end_time * NS_TO_S                        (seconds, 7 decimal places)
-    Decode time (ms)  = (end_time - arrival - TTFT) * NS_TO_MS   (ms, 3 decimal places)
-    stall_total (ms)  = queuing_delay * NS_TO_MS                  (ms)
-    """
+    """Transform LLMServingSim output rows into benchmark comparison format."""
     out = pd.DataFrame()
 
     out["request id"] = df["request id"].astype(int)
     out["L_prefill"] = df["input"].astype(int)
     out["L_decode"] = (df["output"] - df["input"]).astype(int)
 
-    # Decode start: time when decode phase begins (arrival + TTFT), in seconds
     out["Decode start (s)"] = ((df["arrival"] + df["TTFT"]) * NS_TO_S).round(7)
 
-    # Decode end: time when decode phase ends (end_time), in seconds
     out["Decode end (s)"] = (df["end_time"] * NS_TO_S).round(7)
 
-    # Decode duration: Decode end - Decode start, in milliseconds
     out["Decode time (ms)"] = (
         (df["end_time"] - df["arrival"] - df["TTFT"]) * NS_TO_MS
     ).round(3)
 
-    # Stall (queuing delay) in milliseconds
     out["stall_total (ms)"] = (df["queuing_delay"] * NS_TO_MS).round(2)
 
     return out
@@ -134,20 +97,16 @@ def main():
     )
     args = parser.parse_args()
 
-    # --- Load ---
     sim_df = load_sim_csv(args.input_csv)
     print(f"[INFO] Loaded {len(sim_df)} rows from {args.input_csv}")
 
-    # --- Convert ---
     result_df = convert(sim_df)
 
-    # Sort to match the time-ordered benchmark table
     if args.sort_by in result_df.columns:
         result_df = result_df.sort_values(args.sort_by).reset_index(drop=True)
     else:
         print(f"[WARN] Sort column '{args.sort_by}' not found; skipping sort.")
 
-    # --- Output path ---
     out_path = args.output or (
         args.input_csv.parent / (args.input_csv.stem + "_converted.csv")
     )
@@ -155,11 +114,9 @@ def main():
     result_df.to_csv(out_path, index=False)
     print(f"[INFO] Saved {len(result_df)} rows to {out_path}")
 
-    # --- Preview ---
     print("\n[PREVIEW] First 5 rows:")
     print(result_df.head(5).to_string(index=False))
 
-    # --- Quick sanity check ---
     neg_decode = (result_df["L_decode"] < 0).sum()
     if neg_decode:
         print(

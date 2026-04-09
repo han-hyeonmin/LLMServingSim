@@ -1,34 +1,12 @@
 #!/usr/bin/env python3
 """
-extrapolate_hw.py
-=================
-Extrapolate existing GPU profiling data (layers.csv, attention.csv) to a new
-hardware configuration using simple ratio-based scaling.
+Extrapolate profiling data (layers.csv, attention.csv) to a new hardware target
+using ratio-based scaling:
+  - layers.csv   : latency ∝ 1 / TFLOPS  (compute-bound)
+  - attention.csv: latency ∝ 1 / mem_BW  (memory-bound)
 
-Scaling strategy:
-  - layers.csv  : latency_new = latency_old × (old_TFLOPS / new_TFLOPS)
-                  (compute-bound proportional scaling)
-  - attention.csv: latency_new = latency_old × (old_mem_BW / new_mem_BW)
-                  (memory-bound proportional scaling)
-
-The script reproduces the exact CSV schema expected by LLMServingSim's
-trace_generator.py and predictor pipeline, so the output can be used as a
-drop-in replacement under  perf_models/{new_hardware}/{model}/tp{tp_size}/.
-
-Usage:
-    python extrapolate_hw.py \
-        --src-hw       TITAN_RTX \
-        --src-dir      perf_models/TITAN_RTX/meta-llama/Llama-3.1-8B/tp1 \
-        --dst-hw       Dojo_Die \
-        --dst-dir      perf_models/Dojo_Die/meta-llama/Llama-3.1-8B/tp1 \
-        --config       hw_config.yaml
-
-    Or use built-in defaults (no config file needed):
-    python extrapolate_hw.py \
-        --src-hw       TITAN_RTX \
-        --src-dir      perf_models/TITAN_RTX/meta-llama/Llama-3.1-8B/tp1 \
-        --dst-hw       Dojo_Die \
-        --dst-dir      perf_models/Dojo_Die/meta-llama/Llama-3.1-8B/tp1
+Output is a drop-in replacement under perf_models/{dst_hw}/{model}/tp{N}/.
+Run with --help for usage examples.
 """
 
 from __future__ import annotations
@@ -50,55 +28,36 @@ except ImportError:
     HAS_YAML = False
 
 
-# ============================================================
-# Hardware Spec Dataclass
-# ============================================================
-
-
 @dataclass
 class HardwareSpec:
     """Hardware specification for ratio-based extrapolation."""
 
     name: str
+    TFLOPs: float  # FP16 peak TFLOPS
+    memory_bw_GBps: float  # Memory bandwidth (GB/s)
 
-    # Compute capability
-    TFLOPs: float  # FP16 peak TFLOPS (total for the device)
-
-    # Memory bandwidth
-    memory_bw_GBps: float  # GB/s  (total device memory bandwidth)
-
-    # (Optional) Attention-specific channel latency overrides
-    # If provided, attention latency can be computed as:
-    #   latency_new = latency_old × (old_BW / new_BW) + channel_latency_offset
-    # Set to 0.0 to disable the additive offset.
+    # Additive channel latency offset for attention (us). 0.0 = disabled.
     channel_latency_prefill_us: float = 0.0
     channel_latency_decode_us: float = 0.0
 
-    # (Optional) Metadata — not used in scaling, but stored for reference
+    # Metadata — not used in scaling
     core_count: int = 0
     TFLOPs_per_core: float = 0.0
 
 
-# ============================================================
-# Built-in Hardware Catalog
-# ============================================================
-
 KNOWN_HARDWARE: dict[str, HardwareSpec] = {
-    # NVIDIA TITAN RTX  (TU102, FP16 Tensor Core peak ~32.6 TFLOPS)
-    # Memory: 24 GB GDDR6, 672 GB/s
+    # NVIDIA TITAN RTX  (TU102 · FP16 Tensor Core ~32.6 TFLOPS · 24 GB GDDR6 672 GB/s)
     "TITAN_RTX": HardwareSpec(
         name="TITAN_RTX",
         TFLOPs=32.6,
         memory_bw_GBps=672.0,
-        core_count=72,  # 72 SMs
+        core_count=72,
     ),
-    # Dojo-style compute die (user-provided spec)
-    # TFLOPs_per_core=1.02, cores_per_die=36 → 36.72 TFLOPS
-    # memory_bw = 3.35 TB/s = 3350 GB/s
+    # Dojo-style compute die  (36 cores × 1.02 TFLOPS = 36.72 TFLOPS · 3.35 TB/s)
     "Dojo_Die": HardwareSpec(
         name="Dojo_Die",
-        TFLOPs=1.02 * (6**2),  # 36.72 TFLOPS
-        memory_bw_GBps=3.35 * 1000,  # 3350 GB/s
+        TFLOPs=1.02 * (6**2),
+        memory_bw_GBps=3.35 * 1000,
         channel_latency_prefill_us=0.4,
         channel_latency_decode_us=0.1,
         core_count=6**2,
@@ -108,20 +67,7 @@ KNOWN_HARDWARE: dict[str, HardwareSpec] = {
 
 
 def load_hw_spec_from_yaml(path: str) -> dict[str, HardwareSpec]:
-    """Load hardware specs from a YAML config file.
-
-    Expected YAML format:
-    ```yaml
-    hardware:
-      MyAccelerator:
-        TFLOPs: 50.0
-        memory_bw_GBps: 2000.0
-        channel_latency_prefill_us: 0.3
-        channel_latency_decode_us: 0.1
-        core_count: 64
-        TFLOPs_per_core: 0.78
-    ```
-    """
+    """Load hardware specs from a YAML config file (see --help for format)."""
     if not HAS_YAML:
         raise ImportError(
             "PyYAML is required to load config files. "
@@ -161,23 +107,15 @@ def get_hw_spec(
     return catalog[name]
 
 
-# ============================================================
-# Scaling Functions
-# ============================================================
-
-
 def scale_layers_csv(
     src_path: str,
     dst_path: str,
     src_spec: HardwareSpec,
     dst_spec: HardwareSpec,
 ) -> pd.DataFrame:
-    """Scale layers.csv using compute TFLOPS ratio.
+    """Scale layers.csv latency by compute TFLOPS ratio (src/dst).
 
-    layers.csv schema: layer_name, input, kv_cache, tp_size, latency(ns)
-
-    Scaling: latency_new = latency_old × (src_TFLOPS / dst_TFLOPS)
-    (Higher TFLOPS → lower latency, hence src/dst ratio)
+    Schema: layer_name, input, kv_cache, tp_size, latency(ns)
     """
     df = pd.read_csv(src_path)
 
@@ -194,10 +132,8 @@ def scale_layers_csv(
     )
     print(f"  [layers.csv] Rows: {len(df)}")
 
-    # Scale latency
     df["latency(ns)"] = (df["latency(ns)"].astype(float) * compute_ratio).astype(int)
 
-    # Write output
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
     df.to_csv(dst_path, index=False)
     print(f"  [layers.csv] Written to: {dst_path}")
@@ -211,16 +147,9 @@ def scale_attention_csv(
     src_spec: HardwareSpec,
     dst_spec: HardwareSpec,
 ) -> pd.DataFrame:
-    """Scale attention.csv using memory bandwidth ratio.
+    """Scale attention.csv latency by memory bandwidth ratio (src/dst).
 
-    attention.csv contains profiled FlashAttention results with columns including:
-      - batch_size, prefill_chunk_size, kv_cache_size, is_prefill
-      - time_stats.attn_prefill.median  (ms, for prefill rows)
-      - time_stats.attn_decode.median   (ms, for decode rows)
-      - Various metadata columns (n_embd, n_q_head, etc.)
-
-    Scaling: latency_new = latency_old × (src_mem_BW / dst_mem_BW)
-    (Higher BW → lower latency)
+    Latency columns: time_stats.attn_{prefill,decode}.median (ms), or p50_ns fallback.
     """
     df = pd.read_csv(src_path)
 
@@ -231,7 +160,7 @@ def scale_attention_csv(
     )
     print(f"  [attention.csv] Rows: {len(df)}")
 
-    # Identify and scale all time_stats columns (they store values in ms)
+    # Identify latency columns (time_stats.* or p50_ns fallback)
     time_cols = [c for c in df.columns if c.startswith("time_stats.")]
     if not time_cols:
         print(
@@ -256,17 +185,11 @@ def scale_attention_csv(
         f"{time_cols[:5]}{'...' if len(time_cols) > 5 else ''}"
     )
 
-    # Write output
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
     df.to_csv(dst_path, index=False)
     print(f"  [attention.csv] Written to: {dst_path}")
 
     return df
-
-
-# ============================================================
-# Main
-# ============================================================
 
 
 def parse_args():
@@ -324,7 +247,7 @@ Examples:
         "--dst-dir", type=str, required=True, help="Path to output directory"
     )
 
-    # Optional: YAML config for custom hardware
+    # YAML config for custom hardware
     parser.add_argument(
         "--config",
         type=str,
@@ -332,7 +255,7 @@ Examples:
         help="YAML file with hardware specs (see --help for format)",
     )
 
-    # Optional: CLI overrides for source specs
+    # CLI spec overrides (src)
     parser.add_argument(
         "--src-tflops", type=float, default=None, help="Override source FP16 TFLOPS"
     )
@@ -343,7 +266,7 @@ Examples:
         help="Override source memory bandwidth (GB/s)",
     )
 
-    # Optional: CLI overrides for destination specs
+    # CLI spec overrides (dst)
     parser.add_argument(
         "--dst-tflops",
         type=float,
@@ -357,7 +280,7 @@ Examples:
         help="Override destination memory bandwidth (GB/s)",
     )
 
-    # Control which files to process
+    # File selection
     parser.add_argument(
         "--skip-layers", action="store_true", help="Skip layers.csv extrapolation"
     )
@@ -365,7 +288,6 @@ Examples:
         "--skip-attention", action="store_true", help="Skip attention.csv extrapolation"
     )
 
-    # Dry run
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -378,13 +300,11 @@ Examples:
 def main():
     args = parse_args()
 
-    # ---- Load hardware specs ----
     extra_specs = {}
     if args.config:
         extra_specs = load_hw_spec_from_yaml(args.config)
         print(f"Loaded {len(extra_specs)} hardware spec(s) from {args.config}")
 
-    # Build source spec
     try:
         src_spec = get_hw_spec(args.src_hw, extra_specs)
     except KeyError:
@@ -403,7 +323,6 @@ def main():
             )
             sys.exit(1)
 
-    # Build destination spec
     try:
         dst_spec = get_hw_spec(args.dst_hw, extra_specs)
     except KeyError:

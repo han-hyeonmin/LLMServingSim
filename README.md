@@ -26,7 +26,7 @@ See full changelog [here](CHANGELOG.md).
 ### 1. Git clone
 
 ```bash
-git clone --recurse-submodules https://github.com/casys-kaist/LLMServingSim.git
+git clone --recurse-submodules https://github.com/han-hyeonmin/LLMServingSim.git
 cd LLMServingSim
 ```
 
@@ -96,7 +96,7 @@ The current version supports the following models and hardware:
 **Models:** `meta-llama/Llama-3.1-8B`, `meta-llama/Llama-3.1-70B`,
 `microsoft/Phi-mini-MoE-instruct`, `mistralai/Mixtral-8x7B-v0.1`
 
-**Hardware:** `A6000`, `H100`, `TPU-v6e-1`
+**Hardware:** `A6000`, `H100`, `TPU-v6e-1`, `T-RTX`
 
 New models and hardware can be added using the provided profiler. See
 [Adding a New Model & Hardware](#adding-a-new-model--hardware).
@@ -142,6 +142,15 @@ memory load and store activity.
 `{output_path}.csv` contains per-request latency metrics. An example is provided at
 `output/example_run.csv`.
 
+To convert the output into a benchmark-comparable format (decode token counts, ns→ms/s),
+use the provided post-processing script:
+
+```bash
+python output/convert_sim_output.py output/example_run.csv
+```
+
+See [`output/README.md`](output/README.md) for details.
+
 ## Adding a New Model & Hardware
 
 ### 1. Build a performance model
@@ -151,6 +160,11 @@ attention latency, and power models for a given hardware target. Once profiling 
 create a cluster config referencing the new hardware name and run `main.py` as usual.
 
 See [`llm_profile/README.md`](llm_profile/README.md) for full profiling instructions.
+
+If the target hardware is not physically available, use `llm_profile/extrapolate_hw.py` to
+scale an existing profile to the target spec. See the
+[Extrapolating to a New Hardware Target](llm_profile/README.md#extrapolating-to-a-new-hardware-target)
+section in `llm_profile/README.md`.
 
 ### 2. Modify simulator functions (optional)
 
