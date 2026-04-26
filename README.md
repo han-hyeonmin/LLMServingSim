@@ -1,25 +1,59 @@
 # LLMServingSim 2.0: A Unified Simulator for Heterogeneous and Disaggregated LLM Serving Infrastructure
 
-## Current Release: **v1.0.0** (2026-02-25)
+## Current Release: **v1.1.0** (2026-04-26)
 
 ### Highlights
 
-- `llm_profile` extended to support MoE architectures (Mixtral-8x7B, Phi-mini-MoE) and
-  TPU-v6e-1; scikit-learn-based attention latency predictor replaces tabular lookup for improved
-  accuracy across varying batch sizes and sequence lengths
-- Multi-instance simulation with configurable request routing (Round Robin, Random, Custom)
-  and Prefill/Decode (P/D) disaggregation across separate prefill and decode instances
-- MoE simulation with expert parallelism across NPUs and expert offloading to CPU or CXL memory,
-  with configurable expert routing policies (Round Robin, Random, Fast, Custom)
-- Prefix caching via RadixAttention with optional second-tier prefix pool across CPU and CXL
-  memory (`--enable-prefix-caching`, `--enable-prefix-sharing`, `--prefix-storage`)
-- Sub-batch interleaving to overlap XPU and PIM computation
-  (`--enable-sub-batch-interleaving`)
-- Power and energy modeling per node covering NPU, CPU, DRAM, interconnect, NIC, and storage
-- CXL memory expansion support with configurable multi-tier memory bandwidth and latency
-- Per-request latency metrics: TTFT, TPOT, and ITL with p99 percentile reporting
+- New vLLM-based layerwise profiler (`profiler/`) capturing real CUDA kernel
+  timings into per-category CSVs (base methodology adapted from
+  [@waneon](https://github.com/waneon))
+- Skew-aware attention: 5-axis weighted-LS alpha fit recovers the FlashAttention
+  varlen penalty on heterogeneous-decode batches
+- Multi-hardware support via the new profiler — RTXPRO6000 profiles included
+- Per-rank MoE latency modeling with EP-aware routing, plus DP+EP via
+  `tp_size`/`pp_size`/`ep_size`/`dp_group` cluster config
+- DP+EP wave synchronization through ASTRA-Sim ALLTOALL with `involved_dim`
+  dimension scoping on 2D topologies
+- vLLM-style real-time request routing (`LOAD` policy)
+- Agentic session support for closed-loop workloads (SWE-bench, tool-calling)
+  with dependency chains across sub-requests
+- Qwen3 model family (Qwen3-32B, Qwen3-30B-A3B MoE) with explicit `head_dim`
+- FP8 KV cache simulation and profiling (`--kv-cache-dtype fp8`)
+- Chunked prefill enabled by default, with per-request token cap
+  (chunked prefill core by [@HyunsuYEE](https://github.com/HyunsuYEE))
+- Non-Docker vLLM installer (`scripts/install-vllm.sh`)
+  ([@junwha](https://github.com/junwha))
+- End-to-end validation suite (`bench/`) comparing vLLM vs simulator on
+  TTFT / TPOT / throughput / running-waiting
+- Profiler `parser.parse_args()` fix (reported and fixed by
+  [@junwha](https://github.com/junwha), [@gleb-kun](https://github.com/gleb-kun))
+- Rich-backed logger shared between simulator and profiler with `success` /
+  `summary` / `stage` / `progress` helpers
+- Directory restructuring: `cluster_config/` → `configs/cluster/`, `model_config/` →
+  `configs/model/`, `dataset/` → `workloads/`, `output/` → `outputs/`
+
+> **Note:** This branch is under active development and may not be stable.  
+> Bug fixes, feature additions, and all contributions via pull requests are welcome! 
 
 See full changelog [here](CHANGELOG.md).
+
+## Repository structure
+
+```
+LLMServingSim/
+├── serving/                # simulator core    (`python -m serving`)
+├── profiler/               # vLLM-based layerwise profiler  (`python -m profiler`)
+├── bench/                  # vLLM end-to-end benchmark + sim validation  (`python -m bench`)
+├── workloads/              # JSONL workloads + ShareGPT generators  (`python -m workloads.generators`)
+├── scripts/                # shared environment / build entry points
+├── configs/                # cluster / model / PIM configurations
+└── astra-sim/              # ASTRA-Sim C++ backend (submodule)
+```
+
+Each Python module has its own README under the directory; this file
+covers the simulator-side workflow end-to-end. Per-paper artifact
+evaluation scripts live on dedicated branches — see
+[Evaluation](#evaluation) below.
 
 ## Build LLMServingSim
 
@@ -32,18 +66,27 @@ cd LLMServingSim
 
 ### 2. Run Docker
 
-This will configure and run the Docker environment. See `docker.sh` for details.
+The codebase ships with two container launchers, one per role:
+
+| Container | Image | Purpose |
+| --- | --- | --- |
+| `scripts/docker-sim.sh`  | `astrasim/tutorial-micro2024` + Python deps | Run the simulator (`python -m serving …`) and ASTRA-Sim. |
+| `scripts/docker-vllm.sh` | `vllm/vllm-openai:v0.19.0`                  | Run the profiler (`python -m profiler`), the benchmark (`python -m bench`), and dataset generation (`python -m workloads.generators`). |
 
 ```bash
-./docker.sh
+./scripts/docker-sim.sh           # for simulation
+./scripts/docker-vllm.sh          # for profiling / benchmarking / dataset gen
 ```
+
+A bare-metal installer for the vLLM side (`scripts/install-vllm.sh`)
+is available for environments without Docker.
 
 ### 3. Build ASTRA-Sim and Chakra
 
-This will compile ASTRA-Sim (analytical backend) and install Chakra. See `compile.sh` for details.
+This will compile ASTRA-Sim (analytical backend) and install Chakra.
 
 ```bash
-./compile.sh
+./scripts/compile.sh
 ```
 
 ## Run LLMServingSim
@@ -51,21 +94,21 @@ This will compile ASTRA-Sim (analytical backend) and install Chakra. See `compil
 ### 1. Set input configurations
 
 All configurations for LLMServingSim are generated automatically by
-`inference_serving/config_builder.py` from a `cluster_config` file.
+`serving/core/config_builder.py` from a `cluster_config` file.
 
-The `cluster_config` file specifies node topology, instance layout, hardware type, memory
+The `configs/cluster` file specifies node topology, instance layout, hardware type, memory
 hierarchy, and interconnect parameters. It also supports per-layer placement rules for weights,
 KV cache, and experts, as well as PIM-enabled device configuration.
 
 **Config paths:**
-- Cluster config: `cluster_config/{config_name}.json`
+- Cluster config: `configs/cluster/{config_name}.json`
 - Logical topology config **(ns3 backend only)**: `astra-sim/inputs/logical_topology/{topology_name}.json`
 
 **Dataset path:**
-- Dataset: `dataset/{dataset_name}.jsonl`
+- Dataset: `workloads/{dataset_name}.jsonl`
 - Runtime-generated traces: `astra-sim/inputs/trace/`
 
-See `cluster_config/` for example configurations and `cluster_config/README.md` for the
+See `configs/cluster/` for example configurations and `configs/cluster/README.md` for the
 configuration format reference.
 
 ### 2. Run LLMServingSim
@@ -73,30 +116,29 @@ configuration format reference.
 Test run:
 
 ```bash
-python main.py \
-    --cluster-config 'cluster_config/single_node_single_instance.json' \
-    --fp 16 --block-size 16 \
-    --dataset 'dataset/sharegpt_req100_rate10_llama.jsonl' \
-    --output 'output/example_single_run.csv' \
-    --num-req 100 --log-interval 1.0
+python -m serving \
+    --cluster-config 'configs/cluster/single_node_single_instance.json' \
+    --dtype float16 --block-size 16 \
+    --dataset 'workloads/example_trace.jsonl' \
+    --output 'outputs/example_single_run.csv' \
+    --log-interval 1.0
 ```
 
-See `run.sh` for additional examples covering multi-instance, P/D disaggregation, MoE,
-prefix caching, CXL memory, PIM, power modeling, and sub-batch interleaving:
+See `serving/run.sh` for additional examples covering multi-instance, P/D disaggregation,
+MoE, prefix caching, CXL memory, PIM, power modeling, and sub-batch interleaving:
 
 ```bash
-./run.sh
+./serving/run.sh
 ```
 
 
-## Parameters of `main.py`
+## Parameters of `serving/__main__.py`
 
-The current version supports the following models and hardware:
+The current version ships profile data for:
 
-**Models:** `meta-llama/Llama-3.1-8B`, `meta-llama/Llama-3.1-70B`,
-`microsoft/Phi-mini-MoE-instruct`, `mistralai/Mixtral-8x7B-v0.1`
-
-**Hardware:** `A6000`, `H100`, `TPU-v6e-1`
+| Hardware | Models |
+|----------|--------|
+| RTXPRO6000 | `meta-llama/Llama-3.1-8B`, `Qwen/Qwen3-32B`, `Qwen/Qwen3-30B-A3B-Instruct-2507` |
 
 New models and hardware can be added using the provided profiler. See
 [Adding a New Model & Hardware](#adding-a-new-model--hardware).
@@ -104,29 +146,58 @@ New models and hardware can be added using the provided profiler. See
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `--cluster-config` | `single_node_single_instance.json` | Node- and instance-level configuration |
-| `--max-batch` | `0` | Maximum batch size; `0` means no limit |
-| `--max-num-batched-tokens` | `2048` | Maximum tokens processed per iteration |
-| `--fp` | `16` | Floating-point precision in bits |
-| `--request-routing-policy` | `RR` | Request routing across instances (`RR`, `RAND`, `CUSTOM`) |
-| `--expert-routing-policy` | `FAST` | Expert token routing for MoE (`RR`, `RAND`, `FAST`, `CUSTOM`) |
-| `--enable-prefix-caching` | `False` | Enable prefix caching via RadixAttention |
+| `--max-num-seqs` | `128` | Maximum number of sequences in a batch (`0` = unlimited). |
+| `--max-num-batched-tokens` | `2048` | Maximum tokens processed per iteration across all requests. With chunked prefill, long inputs are split across iterations; without it, this caps max input length |
+| `--long-prefill-token-threshold` | `0` | Per-request token cap per step for chunked prefill (`0` = disabled). Prevents long prompts from monopolizing the token budget |
+| `--dtype` | `float16` | Model weight data type (`float16`, `bfloat16`, `float32`, `int8`) |
+| `--kv-cache-dtype` | `auto` | KV cache data type: `auto` (inherit from `--dtype`) or `fp8` (use `profile_fp8.csv`, halves KV cache memory) |
+| `--request-routing-policy` | `LOAD` | Request routing across instances: `LOAD` (vLLM-style weighted least-loaded), `RR`, `RAND`, `CUSTOM` |
+| `--expert-routing-policy` | `COPY` | Expert token routing for MoE: `COPY` (random routing with block copy), `RR`, `RAND`, `CUSTOM` |
+| `--enable-chunked-prefill` | `True` | Enable chunked prefill to split long prefill requests across iterations. Use `--no-enable-chunked-prefill` to disable |
+| `--enable-prefix-caching` | `True` | Enable prefix caching via RadixAttention. Use `--no-enable-prefix-caching` to disable |
 | `--enable-prefix-sharing` | `False` | Enable second-tier prefix cache pooling |
 | `--prefix-storage` | `None` | Storage tier for the second-tier prefix pool (`None`, `CPU`, `CXL`) |
 | `--enable-local-offloading` | `False` | Enable weight offloading to local memory |
 | `--enable-attn-offloading` | `False` | Enable attention computation offloading to PIM |
 | `--enable-sub-batch-interleaving` | `False` | Enable sub-batch interleaving for XPU/PIM overlap |
-| `--enable-attn-prediction` | `False` | Enable real-time attention latency prediction |
 | `--prioritize-prefill` | `False` | Prioritize prefill requests in scheduling |
 | `--block-size` | `16` | KV cache block size in tokens |
-| `--dataset` | `None` | Path to `.jsonl` dataset; if `None`, add requests manually in `main.py` |
+| `--dataset` | `None` | Path to `.jsonl` dataset; if `None`, add requests manually in `serving/__main__.py` |
 | `--output` | `None` | Path for per-request CSV output; if `None`, stdout only |
-| `--gen` | `True` | Set to `False` to skip the initiation (prefill) phase |
-| `--num-req` | `100` | Number of requests to simulate |
-| `--log-interval` | `0.5` | Throughput logging interval in seconds |
+| `--skip-prefill` | `False` | Skip the prefill phase, running decode only |
+| `--num-reqs` | `0` | Number of entries (requests or sessions) to load from the dataset (`0` = all). For agentic datasets, each entry is a session with multiple sub-requests |
+| `--log-interval` | `1.0` | Throughput logging interval in seconds |
 | `--log-level` | `WARNING` | Logging verbosity (`WARNING`, `INFO`, `DEBUG`) |
 | `--network-backend` | `analytical` | Network simulation backend (`analytical`, `ns3`) |
 
-## Outputs of `main.py`
+## Dataset Format
+
+LLMServingSim accepts `.jsonl` dataset files with one entry per line. Two formats are supported:
+
+**Flat requests** (e.g., ShareGPT) — each line is an independent request:
+```json
+{"input_toks": 1472, "output_toks": 133, "arrival_time_ns": 4059740, "input_tok_ids": [...], "output_tok_ids": [...]}
+```
+
+**Agentic sessions** (e.g., SWE-bench) — each line is a session with chained LLM calls:
+```json
+{
+  "session_id": "session_0",
+  "arrival_time_ns": 4059740,
+  "sub_requests": [
+    {"input_toks": 1472, "output_toks": 133, "tool_duration_ns": 127348767},
+    {"input_toks": 1582, "output_toks": 125, "tool_duration_ns": 197295027},
+    {"input_toks": 1734, "output_toks": 77, "tool_duration_ns": 0}
+  ]
+}
+```
+
+In agentic mode, the simulator respects dependency chains: each sub-request is submitted
+only after its predecessor completes and the `tool_duration_ns` delay elapses. Both formats
+can coexist in the same file. `input_tok_ids`/`output_tok_ids` are optional per sub-request
+and enable prefix caching.
+
+## Outputs of `serving/__main__.py`
 
 ### 1. Standard output
 
@@ -140,86 +211,110 @@ memory load and store activity.
 ### 2. Output file
 
 `{output_path}.csv` contains per-request latency metrics. An example is provided at
-`output/example_run.csv`.
+`outputs/example_run.csv`.
 
 ## Adding a New Model & Hardware
 
 ### 1. Build a performance model
 
-LLMServingSim uses the PyTorch-based profiler in `llm_profile/` to generate per-layer latency,
-attention latency, and power models for a given hardware target. Once profiling is complete,
-create a cluster config referencing the new hardware name and run `main.py` as usual.
+LLMServingSim uses the vLLM-based layerwise profiler in `profiler/` to generate per-layer
+latency data for a given hardware target. The profiler captures real CUDA kernel timings from
+vLLM execution paths and writes a per-category CSV bundle consumed by the simulator:
+`profiler/perf/<hardware>/<model>/<variant>/tp<N>/{dense,per_sequence,attention,moe}.csv`,
+with `skew.csv` and `skew_fit.csv` added when the heterogeneous-decode sweep is
+enabled (default). The sibling `meta.yaml` records the engine flags used, compact
+sweep specs (`attention_grid`, `skew_profile`), and a `skew_fit` summary pointing
+at each TP's per-bucket alpha table.
 
-See [`llm_profile/README.md`](llm_profile/README.md) for full profiling instructions.
+```bash
+./scripts/docker-vllm.sh                       # launch vLLM Docker
+# Edit MODEL / HARDWARE / TP_DEGREES in profiler/profile.sh, then:
+./profiler/profile.sh
+```
 
-### 2. Modify simulator functions (optional)
+See [`profiler/README.md`](profiler/README.md) for full profiling instructions.
 
-The current version supports Llama-based model architectures. Models that deviate from this
-architecture may require modifications to the following:
+### 2. Extend architecture support (only when needed)
 
-**`inference_serving/memory_model.py`** — functions `calculate_sizes` and `get_weight`
+The simulator currently ships with five architecture yamls under `profiler/models/`:
 
-`calculate_sizes` computes input, weight, and output tensor sizes for each layer type.
-`get_weight` aggregates total model size from `calculate_sizes`.
-Modify these according to the target model architecture.
+| `model_type` | Covers |
+| --- | --- |
+| `llama` | Llama 3.x dense family (8B / 70B / 405B / custom shapes) |
+| `qwen3` | Qwen3 dense family (0.6B–32B, with per-head `qk_norm`) |
+| `qwen3_moe` | Qwen3 MoE family (30B-A3B, 235B-A22B, …) |
+| `mixtral` | `MixtralForCausalLM` (8x7B, 8x22B) |
+| `phimoe` | `PhiMoEForCausalLM` (Phi-3.5-MoE) |
 
-**`inference_serving/trace_generator.py`** — function `synthesize_trace`
+If the HF `config.json` you drop into `configs/model/<org>/<name>.json` has a
+`model_type` from the table above, the simulator runs unchanged — `trace_generator`
+walks the matching yaml's `sequence:` and looks up each layer in the profiled
+CSVs. Only touch the simulator when the new model genuinely diverges:
 
-This function constructs the per-iteration execution trace by stacking layers according to the
-model architecture. When modifying it, ensure:
+**New `model_type` (e.g. `gemma2`, `deepseek_v3`, `gpt_oss`)**: add
+`profiler/models/<model_type>.yaml` with the model's vLLM class bindings
+(`catalog:`) and iteration order (`sequence:`). The profiler emits CSVs for
+whatever layers the yaml declares; the simulator walks the same sequence at
+trace time. No Python changes needed if the block structure fits
+`prologue → pre_attn → post_attn → (mlp_dense | mlp_moe) → head`.
 
-- The ATTENTION layer is correctly separated per request
-- The output size of layer *i* matches the input size of layer *i+1*
-- ALLREDUCE operations are correctly placed for tensor-parallel synchronization
+**Novel block structure** (e.g. sliding-window attention, MLA, dual-MLP
+decoders): extend `TP_ALLREDUCE_AFTER` or the sequence walker in
+`serving/core/trace_generator.py` and add any collective hooks the new
+block needs.
+
+**Non-standard tensor shapes** (e.g. DeepSeek's MLA KV compression, Gemma's
+GQA-per-layer variation): extend `calculate_sizes` in
+`serving/core/memory_model.py` to compute input / weight / output sizes
+for the new layer types. `get_weight` aggregates per-block weights from the
+same function.
+
+## Validation
+
+End-to-end validation against real vLLM lives in `bench/`. It runs a vLLM
+serving benchmark, runs the same workload through the simulator, and produces
+plots + a numeric summary comparing TTFT / TPOT / throughput / running-waiting.
+
+We rebuilt the per-hardware performance model on top of a new
+vLLM-based layerwise profiler (`profiler/`) and revalidated the
+simulator end-to-end on RTXPRO6000 against vLLM v0.19.0 using 300-request
+ShareGPT workloads. Errors are sub-3% on every metric, and the DP+EP
+MoE path (Qwen3-30B-A3B-Instruct-2507, DP=2 × EP=2) tracks vLLM as
+tightly as the dense TP path:
+
+| Model | Parallelism | TTFT mean | TPOT mean | Latency mean |
+| --- | --- | --- | --- | --- |
+| Llama-3.1-8B                | TP=1 dense       | -2.8% | -0.3% | -1.0% |
+| Qwen3-32B                   | TP=2 dense       | -0.7% | -0.3% | -0.4% |
+| Qwen3-30B-A3B-Instruct-2507 | DP=2 × EP=2 MoE  | -2.9% | +0.6% | +0.4% |
+
+Throughput tracking (vLLM vs simulator):
+
+**Llama-3.1-8B (TP=1 dense)**
+
+![Llama-3.1-8B throughput](bench/examples/Llama-3.1-8B/validation/throughput.png)
+
+**Qwen3-32B (TP=2 dense)**
+
+![Qwen3-32B throughput](bench/examples/Qwen3-32B/validation/throughput.png)
+
+**Qwen3-30B-A3B-Instruct-2507 (DP=2 × EP=2 MoE)**
+
+![Qwen3-30B-A3B throughput](bench/examples/Qwen3-30B-A3B-Instruct-2507/validation/throughput.png)
+
+Per-percentile summaries (P50 / P90 / P95 / P99), running / waiting
+queue plots, and latency CDFs for all three models live under
+`bench/examples/<model>/validation/`. See [`bench/README.md`](bench/README.md)
+for the full layout, how to reproduce an example, and how to add new
+ones.
 
 ## Evaluation
 
-The [`evaluation/`](evaluation/) directory contains the artifact evaluation flow for Figures 5 to 10
-from the paper. It includes figure-specific shell scripts, plotting code, parsers, processed
-reference inputs, and preserved example outputs under `evaluation/artifacts/`.
-
-Before running artifact evaluation, complete the setup steps above (`./docker.sh` and
-`./compile.sh`) and run the evaluation commands inside that environment.
-
-Enter `evaluation/` first:
-
-```bash
-cd evaluation
-```
-Run an individual figure:
-
-```bash
-bash figure_5.sh
-bash figure_6.sh
-bash figure_7.sh
-bash figure_8.sh
-bash figure_9.sh
-bash figure_10.sh
-```
-
-To reproduce the full evaluation set in one pass:
-
-```bash
-bash run_all.sh
-```
-
-To compare generated parsed outputs against preserved artifact snapshots:
-
-```bash
-# Compare all figures (5-10)
-bash compare.sh
-# Compare one figure
-bash compare.sh 5
-# Compare multiple selected figures
-bash compare.sh 5 7 9
-# Equivalent single-figure form
-bash compare.sh figure_5
-```
-
-For visual validation, compare generated PDFs with the corresponding `*_ref.pdf` files in each
-figure folder.
-
-See [`evaluation/README.md`](evaluation/README.md) for detailed folder structure, reference-comparison guidance, and per-figure notes.
+> **Note:** To reproduce the ISPASS '26 artifact evaluation, switch to the
+> [`ispass26-artifact`](../../tree/ispass26-artifact) branch:
+> ```bash
+> git checkout ispass26-artifact
+> ```
 
 ## Publications
 
