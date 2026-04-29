@@ -1,0 +1,38 @@
+FILE_A: LLMSERVINGSIM_ROOT/llm_profile/perf_models/WSC-LLM/meta-llama/Llama-3.1-8B/tp4/manual_cal_backup/layers.csv
+FILE_B: LLMSERVINGSIM_ROOT/llm_profile/perf_models/WSC-LLM/meta-llama/Llama-3.1-8B/tp4/layers.csv
+
+====================================================
+  [Step 1] Schema Validation
+====================================================
+[Warning] Row count mismatch: FILE_A=114688, FILE_B=84000
+          Truncating to 84000 rows (shorter: FILE_B).
+[Validation OK] Key sets match (84000 unique keys).
+
+Matched rows: 84000
+
+====================================================
+  [Step 2] Global Linear Transform: y = a*x + b
+====================================================
+    a  = 2.236421
+    b  = 237499.47
+    R2 = 0.975603
+
+====================================================
+  [Step 3] Per-layer Linear Transform
+====================================================
+  layer_name                    a              b       R2       n
+  ---------------------------------------------------------------
+  embedding               21.0059        4143.22   0.9994    6000
+  input_layernorm         48.8869       18714.54   0.9999    6000
+  q_proj                   2.3392       35932.95   0.9811    6000
+  k_proj                   2.4964       20327.03   0.9691    6000
+  v_proj                   2.5001       20320.80   0.9660    6000
+  rope                    33.7906       16232.61   0.9980    6000
+  o_proj                   2.5615       25851.62   0.9948    6000
+  post_layernorm          49.0233       18448.30   0.9999    6000
+  gate_proj                2.3407       69775.42   0.9928    6000
+  up_proj                  2.3281       70446.11   0.9924    6000
+  act_fn                  13.0700        1231.15   0.9997    6000
+  down_proj                2.3487       74418.87   0.9924    6000
+  final_layernorm         48.9060       19392.32   0.9999    6000
+  lm_head                  2.2247      329688.95   0.9984    6000
