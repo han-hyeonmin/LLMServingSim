@@ -90,8 +90,10 @@ is available for environments without Docker.
 **Option B — conda (no Docker)**
 
 ```bash
-conda env create -f servingsim.yml
+conda env create -f scripts/servingsim.yml
 conda activate servingsim
+conda env create -f scripts/vllm-env.yml
+conda activate vllm-env
 ```
 
 ### 3. Build ASTRA-Sim and Chakra
