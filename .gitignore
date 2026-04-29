@@ -9,9 +9,16 @@ __pycache__/
 # Ignore pkl files
 *.pkl
 
-# Ignore local agent notes
-AGENT.md
-CLAUDE.md
+# Ignore bench results
+bench/results/
 
 # VSCode
 .vscode
+
+# AI agent cache files
+.claude/
+.codex/
+.cursor/
+.copilot/
+.aider*
+.continue/
