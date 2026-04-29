@@ -20,8 +20,8 @@
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 1,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 }
             ]
@@ -42,8 +42,8 @@
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 1,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "decode"
                 }
             ]
@@ -64,8 +64,8 @@
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 1,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 }
             ]

@@ -10,7 +10,7 @@
         "",
         "Mapping to LLMServingSim:",
         "  - Each die pool = 1 node",
-        "  - Each Px/Dx instance = 1 instance with npu_num=4, npu_group=4",
+        "  - Each Px/Dx instance = 1 instance with num_npus=4, tp_size=4",
         "  - P instances: pd_type='prefill'",
         "  - D instances: pd_type='decode'",
         "",
@@ -20,8 +20,8 @@
         "  - Total memory BW: 3.35 TB/s",
         "",
         "Per-instance (4 dies):",
-        "  - npu_num=4 (4 dies per instance for TP=4)",
-        "  - npu_group=4 (all 4 dies participate in TP)",
+        "  - num_npus=4 (4 dies per instance for TP=4)",
+        "  - tp_size=4 (all 4 dies participate in TP)",
         "  - npu_mem per die: mem_bw derived from 3350 GB/s total",
         "",
         "Inter-pool link (2-hop D2D for KV transfer):",
@@ -44,53 +44,53 @@
                 {
                     "_comment": "P1: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P2: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P3: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P4: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 }
             ]
@@ -107,53 +107,53 @@
                 {
                     "_comment": "D1: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "decode"
                 },
                 {
                     "_comment": "D2: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "decode"
                 },
                 {
                     "_comment": "D3: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "decode"
                 },
                 {
                     "_comment": "D4: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "decode"
                 }
             ]
@@ -170,53 +170,53 @@
                 {
                     "_comment": "P5: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P6: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P7: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 },
                 {
                     "_comment": "P8: 4 dies in 2×2 mesh",
                     "model_name": "meta-llama/Llama-3.1-8B",
-                    "hardware": "Dojo_Die",
+                    "hardware": "WSC-LLM",
                     "npu_mem": {
                         "mem_size": 32,
                         "mem_bw": 3350,
                         "mem_latency": 0
                     },
-                    "npu_num": 4,
-                    "npu_group": 4,
+                    "num_npus": 4,
+                    "tp_size": 4,
                     "pd_type": "prefill"
                 }
             ]

@@ -22,3 +22,6 @@ bench/results/
 .copilot/
 .aider*
 .continue/
+
+# Ignore generated workload traces
+workloads/azure_trace_*.jsonl

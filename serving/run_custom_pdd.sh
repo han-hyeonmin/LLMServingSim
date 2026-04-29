@@ -11,15 +11,13 @@ conda activate servingsim
 #   - 1 Decode Instance (TP=4)
 #   - KV Cache Transfer: 112 GB/s Link bandwidth
 #
-# Purpose: 
-#   Evaluate the throughput and latency of an asymmetric disaggregated 
+# Purpose:
+#   Evaluate the throughput and latency of an asymmetric disaggregated
 #   serving architecture with different TP scales per pool.
 # ==============================================================================
 
-# Run custom disaggregated serving simulation
-python main.py --cluster-config 'cluster_config/custom_disaggregated.json' \
-    --fp 16 --block-size 16 \
-    --dataset 'dataset/azure_trace_conv_req100_all_arrives_at_0_llama.jsonl' \
-    --output 'output/custom_pdd_run_all_arrives_at_0.csv' \
-    --num-req 100 \
-    --log-interval 1.0
+python -m serving --cluster-config 'configs/cluster/custom_disaggregated.json' \
+    --dtype float16 --block-size 16 \
+    --dataset 'workloads/azure_trace_conv_llama.jsonl' \
+    --output 'outputs/custom_pdd_run_all_arrives_at_0.csv' \
+    --num-req 100

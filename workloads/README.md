@@ -12,7 +12,11 @@ workloads/
 ├── *.jsonl                    workload files (flat or agentic; see Format)
 ├── generators/                JSONL generators
 │   ├── __main__.py            python -m workloads.generators <name> ...
-│   └── sharegpt.py            multi-turn ShareGPT parser (tokenizer + optional vLLM)
+│   ├── sharegpt.py            multi-turn ShareGPT parser (tokenizer + optional vLLM)
+│   └── azure_trace_parser.py  Azure LLM Inference Trace CSV parser
+├── azurepublicdataset/        Azure CSV source files (not tracked in git)
+│   ├── AzureLLMInferenceTrace_conv.csv
+│   └── AzureLLMInferenceTrace_code.csv
 └── examples/                  ready-to-edit per-model invocation templates
     ├── gen-llama-3.1-8b.sh
     ├── gen-qwen3-30b-a3b.sh
@@ -23,7 +27,7 @@ workloads/
 
 Datasets are stored as `.jsonl` files (one JSON object per line). Two formats are supported:
 
-### Flat requests (e.g., ShareGPT)
+### Flat requests (e.g., ShareGPT, Azure)
 
 Each line is an independent request:
 
@@ -83,8 +87,19 @@ Generated on demand by `python -m workloads.generators sharegpt --model <hf-id>
 this directory and follow the flat-request format above with `input_tok_ids`
 populated for prefix-cache hashing.
 
+### Azure LLM Inference traces
+
+Derived from the [Azure LLM Inference Public Dataset](https://github.com/Azure/AzurePublicDataset).
+Two trace types are available: `conv` (conversation) and `code`. Token counts come
+from the real Azure trace; `input_tok_ids` / `output_tok_ids` are filled with
+uniform-random dummy IDs (sufficient for prefix-cache hash testing).
+
+Generated on demand by `python -m workloads.generators azure --dataset <conv|code>
+--model <hf-id>` (see `generators/`). The raw CSV files must be placed in
+`workloads/azurepublicdataset/` before running.
 
 ### SWE-bench agentic traces
+
 Agentic sessions derived from real SWE-bench coding tasks with LLM calls chained
 by tool calls (bash, grep, file edits). Each session is a complete coding task
 consisting of multiple LLM sub-requests (6--20 per session) interleaved with tool
@@ -95,11 +110,14 @@ executions.
 | `swe-bench-qwen3-30b-a3b-50-sps0.2.jsonl` | 50 | 765 | 15.3 | 0.2 | Qwen3-30B-A3B |
 
 ### Other
+
 | File | Description |
 | --- | --- |
 | `example_trace.jsonl` | Small example trace for quick testing |
 
 ## Generating workloads
+
+### ShareGPT
 
 Workloads are produced via the `generators/` subpackage, which uses the
 target model's tokenizer to populate `input_tok_ids` (so prefix-cache
@@ -131,6 +149,36 @@ python -m workloads.generators sharegpt \
 fill `output_tok_ids` with the model's natural responses (free
 generation). Without it, `output_tok_ids` come straight from the
 ShareGPT assistant turn.
+
+### Azure
+
+Place the raw CSV files in `workloads/azurepublicdataset/` first, then:
+
+```bash
+# Conversation trace (all valid requests)
+python -m workloads.generators azure \
+    --dataset conv \
+    --model meta-llama/Llama-3.1-8B \
+    --output workloads/azure_trace_conv_llama.jsonl
+
+# Code trace, capped at 100 requests, batch mode
+python -m workloads.generators azure \
+    --dataset code \
+    --model meta-llama/Llama-3.1-8B \
+    --max-requests 100 \
+    --all-arrives-at-0 \
+    --output workloads/azure_trace_code_req100_all_arrives_at_0_llama.jsonl
+```
+
+Key options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--dataset` | — | `conv` or `code` |
+| `--max-requests N` | all | Cap the number of output requests |
+| `--max-input-toks N` | 2048 | Drop requests whose `input_toks > N` |
+| `--max-kv-toks N` | 4096 | Drop requests whose `input_toks + output_toks > N` |
+| `--all-arrives-at-0` | off | Set every `arrival_time_ns` to 0 (batch / offline mode) |
 
 To create a workload manually, write JSON objects to a `.jsonl` file
 following the format above and pass the file path via `--dataset` to

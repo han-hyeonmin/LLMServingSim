@@ -1,17 +1,100 @@
 """
 azure_trace_parser.py — Azure LLM Inference Trace CSV → LLMServingSim JSONL
+[LEGACY — superseded by workloads/generators/azure_trace_parser.py]
 
-Usage:
+================================================================================
+README (archived)
+================================================================================
+
+# Azure Trace Parser
+
+Converts Azure LLM Inference Public Trace
+(https://github.com/Azure/AzurePublicDataset) CSV files into the `.jsonl`
+workload trace format consumed by LLMServingSim.
+
+## Quick Start
+
+    # Convert the conversation trace (all valid requests)
     python dataset/azurepublicdataset/azure_trace_parser.py conv
-    python dataset/azurepublicdataset/azure_trace_parser.py code --max-requests 100
-    python dataset/azurepublicdataset/azure_trace_parser.py conv --max-input-tokens 4096
-    python dataset/azurepublicdataset/azure_trace_parser.py conv --all-arrives-at-0
 
-Output: dataset/azure_trace_{conv|code}[_reqN][_all_arrives_at_0]_llama.jsonl
+    # Convert the code trace, limited to 100 requests
+    python dataset/azurepublicdataset/azure_trace_parser.py code --max-requests 100
+
+You will be prompted for a Hugging Face token (required for the gated
+Llama-3.1-8B tokenizer).
+
+## Arguments
+
+    dataset (positional)   conv or code
+    --max-requests N       Cap the number of output requests          (default: all)
+    --max-input-tokens N   Drop requests whose input_toks > N         (default: 2048)
+    --max-total-tokens N   Drop requests whose input+output_toks > N  (default: 4096)
+    --all-arrives-at-0     Set all arrival_time_ns to 0 (batch mode)
+
+### How to choose --max-input-tokens
+
+    max-input-tokens  ≤  main.py --max-num-batched-tokens   (scheduler upper bound)
+    max-input-tokens  ≤  layer.sh --max-len                  (layers.csv coverage)
+
+With the current project defaults (--max-num-batched-tokens 2048, --max-len 6000),
+the effective ceiling is min(2048, 6000) = 2048.
+
+## Output
+
+Files are written to the dataset/ directory (one level above the script).
+
+    … conv                    →  dataset/azure_trace_conv_llama.jsonl
+    … conv --max-requests 100 →  dataset/azure_trace_conv_req100_llama.jsonl
+    … code --max-requests 500 →  dataset/azure_trace_code_req500_llama.jsonl
+
+Each output line:
+    {
+        "input_toks":      128,
+        "output_toks":     64,
+        "arrival_time_ns": 350000000,
+        "input_tok_ids":   [91012, 4837, ...],
+        "output_tok_ids":  [7231, 55902, ...]
+    }
+
+## Request Filtering
+
+    raw CSV row
+      ├── input_toks ≤ 0 or output_toks ≤ 0         →  SKIP  (data quality)
+      ├── input_toks > --max-input-tokens            →  SKIP  (scheduler / profile coverage)
+      ├── input_toks + output_toks > --max-total     →  SKIP  (simulator OOM prevention)
+      └── PASS  →  written to .jsonl
+
+## Directory Layout
+
+    dataset/
+    ├── azurepublicdataset/
+    │   ├── azure_trace_parser.py            ← this script
+    │   ├── README.md                        ← archived into this docstring
+    │   ├── AzureLLMInferenceTrace_conv.csv
+    │   └── AzureLLMInferenceTrace_code.csv
+    ├── azure_trace_conv_llama.jsonl
+    └── sharegpt_req100_rate10_llama.jsonl
+
+## End-to-End Example
+
+    # 1. Generate the trace
+    python dataset/azurepublicdataset/azure_trace_parser.py conv \\
+        --max-requests 100 \\
+        --max-input-tokens 2048
+
+    # 2. Run the simulator
+    python main.py \\
+        --cluster-config cluster_config/dojo_pd_3node.json \\
+        --dataset dataset/azure_trace_conv_req100_llama.jsonl \\
+        --max-num-batched-tokens 2048 \\
+        --max-batch 5 \\
+        --num-req 100 \\
+        --log-level INFO
+
+================================================================================
 """
 
 import os
-import sys
 import json
 import random
 import getpass
@@ -44,13 +127,15 @@ TIMESTAMP_COL = "TIMESTAMP"
 INPUT_TOKENS_COL = "ContextTokens"
 OUTPUT_TOKENS_COL = "GeneratedTokens"
 
-# Paths — script in dataset/azurepublicdataset/, output goes to dataset/
+# Paths — script in workloads/v0/, CSVs in workloads/azurepublicdataset/, output goes to workloads/v0/
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_DIR = os.path.dirname(SCRIPT_DIR)
+WORKLOADS_DIR = os.path.dirname(SCRIPT_DIR)  # workloads/
+AZURE_CSV_DIR = os.path.join(WORKLOADS_DIR, "azurepublicdataset")
+DATASET_DIR = SCRIPT_DIR  # workloads/v0/
 
 CSV_FILES = {
-    "conv": os.path.join(SCRIPT_DIR, "AzureLLMInferenceTrace_conv.csv"),
-    "code": os.path.join(SCRIPT_DIR, "AzureLLMInferenceTrace_code.csv"),
+    "conv": os.path.join(AZURE_CSV_DIR, "AzureLLMInferenceTrace_conv.csv"),
+    "code": os.path.join(AZURE_CSV_DIR, "AzureLLMInferenceTrace_code.csv"),
 }
 
 
@@ -115,8 +200,6 @@ def convert_csv_to_jsonl(
                 skipped_count += 1
                 continue
 
-            # Drop if input alone exceeds scheduler's max_num_batched_tokens,
-            # which also prevents _get_perf_row KeyError on layers.csv miss.
             if input_len > max_input_tokens:
                 skipped_input_too_large += 1
                 skipped_count += 1
