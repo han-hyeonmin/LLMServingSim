@@ -1,22 +1,46 @@
 """
-Find linear transformation y = ax + b between manual_cal and extrapolated latency.
-See README.md for details.
+find_linear_transform.py
+
+Fit y = ax + b (OLS) between two layers.csv latency tables:
+  FILE_A : manual calculation  (source)
+  FILE_B : extrapolated profiling via extrapolate_hw.py  (target)
+
+See README.md for full pipeline context and result interpretation.
+
+Configuration
+-------------
+Set root_dir, FILE_A, FILE_B in the "Configuration" block below.
+root_dir accepts:
+  - An absolute path       : "/data/perf_models/WSC-LLM/.../tp4"
+  - A relative path        : "../../perf_models/WSC-LLM/.../tp4"
+  - An environment variable: os.environ.get("PERF_MODEL_DIR", ".")
+The resolved paths are never printed; only FILE_A and FILE_B labels appear
+in all output so that internal server paths are not exposed.
 """
 
 import csv
 import sys
 from pathlib import Path
-from collections import defaultdict
 
 # ── Configuration ─────────────────────────────────────
-root_dir = "LLMSERVINGSIM_ROOT/llm_profile/perf_models/WSC-LLM/meta-llama/Llama-3.1-8B/tp4/"
-FILE_A = "manual_cal_backup/layers.csv"  # source: manual calculation
-FILE_B = "layers.csv"  # target: extrapolated profiling
-COL_KEY = "layer_name"
-COL_INPUT = "input"
-COL_KV = "kv_cache"
-COL_TP = "tp_size"
-COL_LATENCY = "latency(ns)"
+# Paths are resolved relative to this script's location so that no absolute
+# server path ever appears in source code.
+#
+# Directory layout assumed:
+#   tp4/
+#   ├── layers.csv                         ← FILE_B
+#   └── manual_cal_backup/
+#       ├── layers.csv                     ← FILE_A
+#       └── linear_estimation/
+#           └── find_linear_transform.py  ← this file (__file__)
+_HERE = Path(__file__).resolve().parent  # linear_estimation/
+FILE_A = _HERE / ".." / "layers.csv"  # manual_cal_backup/layers.csv
+FILE_B = _HERE / ".." / ".." / "layers.csv"  # tp4/layers.csv
+# ──────────────────────────────────────────────────────
+
+# Human-readable labels used in all print() calls instead of raw paths.
+LABEL_A = "FILE_A (manual_cal)"
+LABEL_B = "FILE_B (extrapolated)"
 
 LAYER_ORDER = [
     "embedding",
@@ -34,140 +58,160 @@ LAYER_ORDER = [
     "final_layernorm",
     "lm_head",
 ]
-# ──────────────────────────────────────────────────────
-
-FILE_A = Path(root_dir) / FILE_A
-FILE_B = Path(root_dir) / FILE_B
 
 
-def read_csv(path) -> list[dict]:
-    """Return list of row dicts from CSV."""
+# ---------------------------------------------------------------------------
+# CSV I/O
+# ---------------------------------------------------------------------------
+
+
+def build_latency_dict(path: Path) -> dict:
+    """Return {(layer_name, input, kv_cache, tp_size): latency_ns} from CSV."""
+    data = {}
     with open(path, newline="", encoding="utf-8") as f:
-        return [{k: v.strip() for k, v in row.items()} for row in csv.DictReader(f)]
+        reader = csv.DictReader(f)
+        for row in reader:
+            key = (
+                row["layer_name"].strip(),
+                row["input"].strip(),
+                row["kv_cache"].strip(),
+                row["tp_size"].strip(),
+            )
+            try:
+                data[key] = float(row["latency(ns)"])
+            except (ValueError, KeyError):
+                pass
+    return data
 
 
-def validate_schema(rows_a: list, rows_b: list) -> tuple:
+# ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+
+
+def validate_schema(path_a: Path, path_b: Path):
     """
-    Check that both files share the same (layer_name, input, kv_cache, tp_size) key set.
-    Truncates to the shorter file if lengths differ; order differences are ignored.
-    Returns (is_valid, rows_a, rows_b).
+    Check that both CSVs cover the same (layer_name, input, kv_cache, tp_size)
+    key set. Truncate to the shorter file before comparison.
+    Abort on mismatch; return (rows_a, rows_b) on success.
     """
+
+    def read_rows(p):
+        with open(p, newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+
+    rows_a = read_rows(path_a)
+    rows_b = read_rows(path_b)
+
+    n = min(len(rows_a), len(rows_b))
     if len(rows_a) != len(rows_b):
-        n_short = min(len(rows_a), len(rows_b))
-        shorter = "FILE_A" if len(rows_a) < len(rows_b) else "FILE_B"
         print(
-            f"[Warning] Row count mismatch: FILE_A={len(rows_a)}, FILE_B={len(rows_b)}"
+            f"[Warning] Row count differs: {LABEL_A}={len(rows_a)}, "
+            f"{LABEL_B}={len(rows_b)} — truncating to {n} rows."
         )
-        print(f"          Truncating to {n_short} rows (shorter: {shorter}).")
-        rows_a = rows_a[:n_short]
-        rows_b = rows_b[:n_short]
+    rows_a, rows_b = rows_a[:n], rows_b[:n]
 
-    def to_key_set(rows):
-        return {(r[COL_KEY], r[COL_INPUT], r[COL_KV], r[COL_TP]) for r in rows}
+    key_cols = ["layer_name", "input", "kv_cache", "tp_size"]
 
-    only_in_a = to_key_set(rows_a) - to_key_set(rows_b)
-    only_in_b = to_key_set(rows_b) - to_key_set(rows_a)
+    def make_key(row):
+        return tuple(row[c].strip() for c in key_cols)
 
-    if only_in_a or only_in_b:
-        print("[Validation FAIL] Key set mismatch:")
-        for label, keys in [("FILE_A", only_in_a), ("FILE_B", only_in_b)]:
-            if keys:
-                print(f"  Only in {label} ({len(keys)} keys):")
-                for k in sorted(keys)[:5]:
-                    print(f"    {k}")
-        return False, rows_a, rows_b
+    keys_a = {make_key(r) for r in rows_a}
+    keys_b = {make_key(r) for r in rows_b}
 
-    print(f"[Validation OK] Key sets match ({len(to_key_set(rows_a))} unique keys).")
+    only_a = keys_a - keys_b
+    only_b = keys_b - keys_a
+
+    if only_a or only_b:
+        print("[Error] Key sets do not match after truncation.")
+        if only_a:
+            print(f"  Keys only in {LABEL_A} (up to 5): {sorted(only_a)[:5]}")
+        if only_b:
+            print(f"  Keys only in {LABEL_B} (up to 5): {sorted(only_b)[:5]}")
+        sys.exit(1)
+
     return True, rows_a, rows_b
 
 
-def build_latency_dict(rows: list) -> dict:
-    """Return dict: (layer_name, input, kv_cache, tp_size) -> latency (float)."""
-    data = {}
-    for row in rows:
-        key = (row[COL_KEY], row[COL_INPUT], row[COL_KV], row[COL_TP])
-        try:
-            data[key] = float(row[COL_LATENCY])
-        except ValueError:
-            pass
-    return data
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
 
 
 def least_squares(xs: list, ys: list) -> tuple:
     """Return (a, b) for y = ax + b via OLS."""
     n = len(xs)
-    sum_x = sum(xs)
-    sum_y = sum(ys)
-    sum_xy = sum(x * y for x, y in zip(xs, ys))
-    sum_xx = sum(x * x for x in xs)
-    denom = n * sum_xx - sum_x**2
+    sx = sum(xs)
+    sy = sum(ys)
+    sxy = sum(x * y for x, y in zip(xs, ys))
+    sxx = sum(x * x for x in xs)
+    denom = n * sxx - sx**2
     if abs(denom) < 1e-12:
-        raise ValueError("Denominator is near zero — no variance in data.")
-    a = (n * sum_xy - sum_x * sum_y) / denom
-    b = (sum_y - a * sum_x) / n
+        raise ValueError("denominator near zero — no variance in x")
+    a = (n * sxy - sx * sy) / denom
+    b = (sy - a * sx) / n
     return a, b
 
 
-def r_squared(xs: list, ys: list, a: float, b: float) -> float:
-    """Return R2 = 1 - SS_res / SS_tot."""
+def r_squared(xs, ys, a, b) -> float:
     y_mean = sum(ys) / len(ys)
     ss_tot = sum((y - y_mean) ** 2 for y in ys)
     ss_res = sum((y - (a * x + b)) ** 2 for x, y in zip(xs, ys))
     return 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 1.0
 
 
-def main():
-    print(f"FILE_A: {FILE_A}")
-    print(f"FILE_B: {FILE_B}\n")
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
-    for f in [FILE_A, FILE_B]:
-        if not Path(f).exists():
-            print(f"[Error] File not found: {f}")
+
+def main():
+    # File existence check — use labels, not raw paths
+    for label, path in [(LABEL_A, FILE_A), (LABEL_B, FILE_B)]:
+        if not path.exists():
+            print(f"[Error] {label} not found.")
             sys.exit(1)
 
-    rows_a = read_csv(FILE_A)
-    rows_b = read_csv(FILE_B)
+    _, rows_a, rows_b = validate_schema(FILE_A, FILE_B)
 
-    print("=" * 52)
-    print("  [Step 1] Schema Validation")
-    print("=" * 52)
-    is_valid, rows_a, rows_b = validate_schema(rows_a, rows_b)
-    if not is_valid:
-        print("[Aborted] Fix mismatches before fitting.")
-        sys.exit(1)
-    print()
+    dict_a = build_latency_dict(FILE_A)
+    dict_b = build_latency_dict(FILE_B)
 
-    data_a = build_latency_dict(rows_a)
-    data_b = build_latency_dict(rows_b)
-
-    common_keys = sorted(set(data_a) & set(data_b))
-    if not common_keys:
-        print("[Error] No common keys found.")
+    common = sorted(set(dict_a) & set(dict_b))
+    if not common:
+        print("[Error] No common keys between the two files.")
         sys.exit(1)
 
-    xs = [data_a[k] for k in common_keys]
-    ys = [data_b[k] for k in common_keys]
-    print(f"Matched rows: {len(common_keys)}\n")
+    xs = [dict_a[k] for k in common]
+    ys = [dict_b[k] for k in common]
 
-    print("=" * 52)
-    print("  [Step 2] Global Linear Transform: y = a*x + b")
-    print("=" * 52)
-    a, b = least_squares(xs, ys)
-    r2 = r_squared(xs, ys, a, b)
-    print(f"    a  = {a:.6f}")
-    print(f"    b  = {b:.2f}")
-    print(f"    R2 = {r2:.6f}\n")
+    # ── Step 1: Global fit ────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  Global linear fit  ({LABEL_A} → {LABEL_B})")
+    print(f"  n = {len(xs)} matched rows")
+    print(f"{'='*60}")
+    try:
+        a, b = least_squares(xs, ys)
+        r2 = r_squared(xs, ys, a, b)
+        print(f"  y = {a:.4f}·x + {b:.2f}    R² = {r2:.4f}")
+    except ValueError as e:
+        print(f"  [Skipped: {e}]")
 
-    print("=" * 52)
-    print("  [Step 3] Per-layer Linear Transform")
-    print("=" * 52)
+    # ── Step 2: Per-layer fit ─────────────────────────
+    from collections import defaultdict
+
     layer_groups: dict = defaultdict(lambda: ([], []))
-    for k in common_keys:
-        layer_groups[k[0]][0].append(data_a[k])
-        layer_groups[k[0]][1].append(data_b[k])
+    for k, x in zip(common, xs):
+        layer_name = k[0]
+        layer_groups[layer_name][0].append(x)
+        layer_groups[layer_name][1].append(dict_b[k])
+
+    print(f"\n{'='*60}")
+    print(f"  Per-layer linear fit")
+    print(f"{'='*60}")
 
     ordered = [l for l in LAYER_ORDER if l in layer_groups]
-    remaining = [l for l in sorted(layer_groups) if l not in LAYER_ORDER]
+    remaining = sorted(l for l in layer_groups if l not in LAYER_ORDER)
 
     print(f"  {'layer_name':<20} {'a':>10} {'b':>14} {'R2':>8}  {'n':>6}")
     print("  " + "-" * 63)

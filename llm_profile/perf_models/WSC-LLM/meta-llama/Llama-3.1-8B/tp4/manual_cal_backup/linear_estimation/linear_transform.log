@@ -1,25 +1,14 @@
-FILE_A: LLMSERVINGSIM_ROOT/llm_profile/perf_models/WSC-LLM/meta-llama/Llama-3.1-8B/tp4/manual_cal_backup/layers.csv
-FILE_B: LLMSERVINGSIM_ROOT/llm_profile/perf_models/WSC-LLM/meta-llama/Llama-3.1-8B/tp4/layers.csv
+[Warning] Row count differs: FILE_A (manual_cal)=114688, FILE_B (extrapolated)=84000 — truncating to 84000 rows.
 
-====================================================
-  [Step 1] Schema Validation
-====================================================
-[Warning] Row count mismatch: FILE_A=114688, FILE_B=84000
-          Truncating to 84000 rows (shorter: FILE_B).
-[Validation OK] Key sets match (84000 unique keys).
+============================================================
+  Global linear fit  (FILE_A (manual_cal) → FILE_B (extrapolated))
+  n = 84000 matched rows
+============================================================
+  y = 2.2364·x + 237499.47    R² = 0.9756
 
-Matched rows: 84000
-
-====================================================
-  [Step 2] Global Linear Transform: y = a*x + b
-====================================================
-    a  = 2.236421
-    b  = 237499.47
-    R2 = 0.975603
-
-====================================================
-  [Step 3] Per-layer Linear Transform
-====================================================
+============================================================
+  Per-layer linear fit
+============================================================
   layer_name                    a              b       R2       n
   ---------------------------------------------------------------
   embedding               21.0059        4143.22   0.9994    6000
