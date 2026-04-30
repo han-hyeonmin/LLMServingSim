@@ -1,16 +1,62 @@
 """
+convert_sim_output.py
+=====================
 Convert LLMServingSim per-request CSV output to benchmark comparison format.
-See README.md for column mapping and usage details.
+
+This script is the sole documentation source; README.md is no longer needed
+and can be deleted after verifying this file.
+
+────────────────────────────────────────────────────────────────────────────
+Directory context
+────────────────────────────────────────────────────────────────────────────
+  outputs/
+    *.csv                   # Per-request results written by main.py --output
+    v0/
+      convert_sim_output.py # This script (current location)
+      *.csv                 # Legacy simulation run results
+
+────────────────────────────────────────────────────────────────────────────
+Column mapping  (all raw time values from scheduler.py::save_output are in ns)
+────────────────────────────────────────────────────────────────────────────
+  Output column        Unit   Derivation
+  ─────────────────── ──────  ──────────────────────────────────────────────
+  L_prefill            tokens  input
+  L_decode             tokens  output - input
+  Decode start (s)     s       (arrival + TTFT) × 1e-9
+  Decode end (s)       s       end_time × 1e-9
+  Decode time (ms)     ms      (end_time - arrival - TTFT) × 1e-6
+  stall_total (ms)     ms      queuing_delay × 1e-6
+
+────────────────────────────────────────────────────────────────────────────
+Usage
+────────────────────────────────────────────────────────────────────────────
+  # Default: writes <stem>_converted.csv in the same directory
+  python outputs/v0/convert_sim_output.py outputs/example_run.csv
+
+  # Specify output path
+  python outputs/v0/convert_sim_output.py outputs/example_run.csv -o outputs/result_bench.csv
+
+  # Change sort column (default: request id)
+  python outputs/v0/convert_sim_output.py outputs/example_run.csv --sort-by "Decode start (s)"
+
+────────────────────────────────────────────────────────────────────────────
+Notes
+────────────────────────────────────────────────────────────────────────────
+  - The `output` column must be a cumulative token count (input + decode tokens).
+    Rows with L_decode < 0 are flagged with a warning but not dropped.
+  - The script exits with an error if any required column is missing:
+    input, output, arrival, end_time, queuing_delay, TTFT
 """
 
 import argparse
 import pandas as pd
 from pathlib import Path
 
-NS_TO_MS = 1e-6  # ns → ms
-NS_TO_S = 1e-9  # ns → s
+# ── Unit conversion factors ──────────────────────────────────────────────────
+NS_TO_MS = 1e-6  # nanoseconds → milliseconds
+NS_TO_S = 1e-9  # nanoseconds → seconds
 
-# All columns emitted by scheduler.py::save_output
+# ── Full column set emitted by scheduler.py::save_output ────────────────────
 SIM_COLS = [
     "instance id",
     "request id",
@@ -26,15 +72,19 @@ SIM_COLS = [
     "ITL",
 ]
 
-# Subset required for conversion
+# ── Subset actually required for the conversion below ────────────────────────
 REQUIRED_COLS = {"input", "output", "arrival", "end_time", "queuing_delay", "TTFT"}
 
 
 def load_sim_csv(path: Path) -> pd.DataFrame:
-    """Load and validate the LLMServingSim output CSV."""
+    """Load and validate the LLMServingSim output CSV.
+
+    Strips whitespace from column names (common artifact of csv.writer) and
+    raises ValueError when any required column is absent.
+    """
     df = pd.read_csv(path)
 
-    # Strip leading/trailing whitespace from column names (common with csv.writer)
+    # csv.writer sometimes pads column names with spaces — normalise them
     df.columns = df.columns.str.strip()
 
     missing = REQUIRED_COLS - set(df.columns)
@@ -47,21 +97,31 @@ def load_sim_csv(path: Path) -> pd.DataFrame:
 
 
 def convert(df: pd.DataFrame) -> pd.DataFrame:
-    """Transform LLMServingSim output rows into benchmark comparison format."""
+    """Transform LLMServingSim output rows into benchmark comparison format.
+
+    All source time values are assumed to be in nanoseconds (ns), as written
+    by scheduler.py::save_output.  Decode start is defined as the moment the
+    first decode step begins, i.e. arrival + TTFT.
+    """
     out = pd.DataFrame()
 
     out["request id"] = df["request id"].astype(int)
     out["L_prefill"] = df["input"].astype(int)
+
+    # output column is cumulative (input + decode tokens), so subtract input
     out["L_decode"] = (df["output"] - df["input"]).astype(int)
 
+    # Decode phase start: when TTFT has elapsed after the request arrived
     out["Decode start (s)"] = ((df["arrival"] + df["TTFT"]) * NS_TO_S).round(7)
 
     out["Decode end (s)"] = (df["end_time"] * NS_TO_S).round(7)
 
+    # Decode duration excludes the prefill (TTFT) portion
     out["Decode time (ms)"] = (
         (df["end_time"] - df["arrival"] - df["TTFT"]) * NS_TO_MS
     ).round(3)
 
+    # Total time the request spent waiting in the queue
     out["stall_total (ms)"] = (df["queuing_delay"] * NS_TO_MS).round(2)
 
     return out
@@ -72,7 +132,8 @@ def main():
         description=(
             "Convert LLMServingSim per-request CSV output to benchmark comparison format.\n"
             "Computes decode token count (output - input), converts ns→ms/s, "
-            "and calculates decode start/end times."
+            "and calculates decode start/end times.\n\n"
+            "README.md has been merged into this file's docstring; it is safe to delete."
         )
     )
     parser.add_argument(
@@ -117,6 +178,7 @@ def main():
     print("\n[PREVIEW] First 5 rows:")
     print(result_df.head(5).to_string(index=False))
 
+    # Sanity-check: negative L_decode means 'output' was not cumulative
     neg_decode = (result_df["L_decode"] < 0).sum()
     if neg_decode:
         print(

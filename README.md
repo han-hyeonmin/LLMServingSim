@@ -228,15 +228,6 @@ memory load and store activity.
 `{output_path}.csv` contains per-request latency metrics. An example is provided at
 `outputs/example_run.csv`.
 
-To convert the output into a benchmark-comparable format (decode token counts, ns→ms/s),
-use the provided post-processing script:
-
-```bash
-python output/convert_sim_output.py output/example_run.csv
-```
-
-See [`output/README.md`](output/README.md) for details.
-
 ## Adding a New Model & Hardware
 
 ### 1. Build a performance model
