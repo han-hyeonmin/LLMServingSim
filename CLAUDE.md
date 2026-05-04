@@ -483,6 +483,23 @@ These must match the C++ enum in `astra-sim/astra-sim/system/AstraMemoryAPI.hh`.
   - Mounts the repo root at `/app/LLMServingSim`; ASTRA-Sim + Chakra are
     built inside via `scripts/compile.sh` on first use
 
+## README and docs split
+
+The repo has two documentation surfaces with deliberate scope:
+
+- **`README.md`** — minimal front door. About / Getting Started / Publications /
+  Citation only. Logo + link bar (Website / Documentation / Contribute /
+  Contact / Changelog) point everything else out to the website. **Do not
+  re-add detailed content (CLI flag tables, dataset schema, profiler
+  walkthroughs, validation plots, etc.) to the README** — it lives on the
+  website now.
+- **`docs/`** — the public docs site (Docusaurus 3, deployed at
+  `https://llmservingsim.ai`). All long-form content lives here. See
+  `docs/AGENTS.md` for site-specific conventions.
+
+When you add a new feature with user-visible behavior, document it on the
+website (not the README).
+
 ## Commit & Pull Request Guidelines
 
 - Short imperative commit messages: `Fix incorrect evict_size accumulation`,
