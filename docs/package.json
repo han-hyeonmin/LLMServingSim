@@ -23,6 +23,7 @@
     "@docusaurus/faster": "3.10.0",
     "@docusaurus/preset-classic": "3.10.0",
     "@docusaurus/theme-mermaid": "^3.10.0",
+    "@easyops-cn/docusaurus-search-local": "^0.55.1",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
     "lucide-react": "^1.14.0",
@@ -52,5 +53,11 @@
   },
   "engines": {
     "node": ">=20.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "serialize-javascript@<7.0.5": ">=7.0.5",
+      "uuid@<14.0.0": ">=14.0.0"
+    }
   }
 }
