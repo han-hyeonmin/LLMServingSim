@@ -72,8 +72,9 @@ python -m serving \
 ```
 
 `--request-routing-policy LOAD` is the default but explicit here for
-clarity. Other options:
+clarity. Options:
 
+- `LOAD`: vLLM-style least-loaded — score `waiting * 4 + running`
 - `RR`: pure round-robin
 - `RAND`: random pick
 - `CUSTOM`: pluggable in `serving/core/router.py`

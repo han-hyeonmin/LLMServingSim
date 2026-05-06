@@ -172,11 +172,9 @@ decode instance picks them up.
    with 64 in-progress decodes and a 1500-token prefill chunk runs
    1564 tokens this step. Decode contributions count.
 
-4. **Pipeline parallelism currently affects scheduling only.** Trace
-   generation still emits the full model; PP scheduling depth
-   prevents over-issuing batches but doesn't yet model
-   inter-stage forwarding cost in detail. If this matters for your
-   research, treat PP results as a lower bound.
+4. **Pipeline parallelism caps `inflight` at `pp_size`.** Chakra splits
+   each iteration's layers across stages with send/recv between them,
+   so inter-stage P2P latency *is* modeled.
 
 ## What's next
 

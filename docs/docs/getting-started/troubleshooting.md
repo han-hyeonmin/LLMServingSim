@@ -189,10 +189,11 @@ especially with MoE + EP or large prefix caches.
 
 **Common causes & fixes:**
 
-- **Block-copy disabled.** For MoE, set
-  `--expert-routing-policy COPY` (the default). `RR` and `RAND`
-  are slower because they touch ASTRA-Sim per token rather than
-  per block.
+- **Block-copy disabled.** For MoE, keep `--enable-block-copy`
+  on (the default). It replays one transformer block's trace across
+  every layer instead of re-computing routing per layer. Safe with
+  `--expert-routing-policy BALANCED` (default, deterministic);
+  `RR`/`RAND` average out per-layer variance.
 - **Verbose logging.** `--log-level DEBUG` writes a lot. Drop to
   `--log-level INFO` or `WARNING`.
 - **`--log-interval` too small.** Setting it to `0.1` makes the

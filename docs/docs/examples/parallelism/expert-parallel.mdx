@@ -73,9 +73,13 @@ python -m serving \
   --log-interval 1.0
 ```
 
-By default, expert routing uses `--expert-routing-policy COPY`: the
-fast block-copy path. Use `--expert-routing-policy RR` or `RAND` to
-mimic real per-token random routing (slower simulation).
+`--expert-routing-policy` defaults to `BALANCED`. Options:
+
+- `BALANCED`: closed-form pigeonhole approximation of a load-balanced
+  trained gate (deterministic, fast)
+- `RR`: per-token round-robin
+- `RAND`: per-token uniform random (seedable)
+- `CUSTOM`: pluggable in `serving/core/gate_function.py`
 
 ## Expected output
 

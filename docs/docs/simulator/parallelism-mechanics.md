@@ -55,16 +55,45 @@ is bound by `o_proj` + `down_proj`, two ALLREDUCEs per decoder block.
 
 ## PP, pipeline stages and `inflight`
 
-Pipeline parallelism is modeled at the *scheduling* level rather than
-in the trace. The scheduler keeps an `inflight` list per stage, capped
-at `pp_size` entries. When the pipeline is full, the scheduler
-returns `None` instead of producing a new batch, micro-batches drain
-through the stages before more get issued.
+```mermaid
+flowchart LR
+    subgraph S0["Stage 0 (.et on GPU 0)"]
+        direction TB
+        L0a["embedding"]
+        L0b["decoder layers<br/>0 .. n/pp − 1"]
+        L0a --> L0b
+    end
+    subgraph S1["Stage 1 (.et on GPU 1)"]
+        direction TB
+        L1a["decoder layers<br/>n/pp .. 2n/pp − 1"]
+    end
+    subgraph SN["Stage pp−1 (.et on last GPU)"]
+        direction TB
+        LNa["decoder layers<br/>(pp−1)·n/pp .. n−1"]
+        LNb["lm_head + sampler"]
+        LNa --> LNb
+    end
+    S0 -->|"COMM_SEND / COMM_RECV<br/>comm_size = activation"| S1
+    S1 -.->|"… more stages …"| SN
+```
 
-This makes overall throughput tracking match production frameworks
-(Megatron-style 1F1B), but the simulator currently doesn't emit
-detailed inter-stage P2P traffic in the trace; PP results should be
-treated as a lower bound on the cost.
+When `pp_size > 1`, the scheduler keeps an `inflight` list capped at
+`pp_size` entries. When the pipeline is full, `schedule()` returns
+`None` and waits for ASTRA-Sim to drain a stage, the same
+back-pressure pattern as Megatron-style 1F1B.
+
+The trace header is stamped with `model_parallel_NPU_group: {pp_size}`.
+Chakra's `llm_converter.py` partitions the per-iteration layer list
+into `pp_size` contiguous groups (`layers_per_group = num_layers //
+pp_size`) and emits one `.et` per NPU. At each stage boundary it pairs
+a `COMM_SEND_NODE` on the upstream NPU with a matching
+`COMM_RECV_NODE` on the downstream one, sized by the boundary
+activation tensor.
+
+Inter-stage P2P latency (link bandwidth, hop count, contention) is
+therefore part of the reported iteration time, and pipeline overlap
+between in-flight batches falls out from each NPU's independent `.et`
+schedule.
 
 ## EP, ALLTOALL around the MoE block
 
@@ -225,7 +254,7 @@ common mistake when extending the trace generator.
 ## When to use which
 
 A rough decision tree (the *configuration* angle is on
-[Examples → Cluster config explained](/docs/examples/cluster-config-explained#dpep--the-topology-that-needs-more-explanation)):
+[Examples → Cluster config explained](/docs/examples/cluster-config-explained)):
 
 - **Single GPU fits the model:** TP=1. Done.
 - **Need more GPUs for memory:** start with TP. ALLREDUCE cost grows
@@ -249,8 +278,14 @@ A rough decision tree (the *configuration* angle is on
    member's batch is much smaller, the ALLTOALL message size matches
    the largest member's. This is *correct* (matches production
    padding) but worth knowing.
-4. **PP doesn't yet model inter-stage forwarding cost in detail.**
-   Take PP latency results as a lower bound.
+4. **PP models inter-stage forwarding via send/recv, not via
+   micro-batch splitting inside an iteration.** Activation shipment
+   between stages goes through ASTRA-Sim send/recv (so link bandwidth
+   and contention show up in the result), but a single iteration is
+   not chunked into multiple micro-batches — the overlap benefit
+   comes from running up to `pp_size` consecutive iterations
+   simultaneously. There's also no knob to pick a pipeline schedule
+   (1F1B, interleaved, etc.).
 
 ## What's next
 

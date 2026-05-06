@@ -224,11 +224,13 @@ Generating each layer's row separately is wasteful, so by default
   that replays block 0's compute pattern with adjusted layer indices.
 
 This is **always** safe for dense models. For MoE with
-`--expert-routing-policy COPY` (the default), it's also safe because
-all blocks route the same tokens through the same experts. For
-`--expert-routing-policy RR | RAND | CUSTOM`, expert distribution
-varies per layer, and `block_copy` becomes an approximation, the
-trace generator turns it off automatically in those modes.
+`--expert-routing-policy BALANCED` (the default), it's also safe
+because the policy is deterministic and every layer produces the
+same `(local_tokens, activated_experts)` pair. For `RR` / `RAND`,
+per-layer variance is small once the batch saturates, so block-copy
+remains a harmless approximation; `CUSTOM` policies that need
+per-layer variance can disable it via `block_copy=False` in the
+gate router constructor.
 
 ## Per-rank latency for MoE
 

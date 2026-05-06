@@ -356,9 +356,9 @@ arrival time to avoid busy-looping.
 CLI flags follow vLLM naming where applicable:
 - `--dtype` (`float16`, `bfloat16`, `float32`, `int8`) — model weight precision
 - `--skip-prefill` — skip the prefill phase (decode only)
-- `--request-routing-policy` (`LOAD`, `RR`, `RAND`) — request routing across instances
-- `--expert-routing-policy` (`COPY`, `RR`, `RAND`) — expert token routing for MoE
-  (`COPY` enables block copy optimization for faster simulation)
+- `--request-routing-policy` (`LOAD`, `RR`, `RAND`, `CUSTOM`) — request routing across instances
+- `--expert-routing-policy` (`BALANCED`, `RR`, `RAND`, `CUSTOM`) — expert token routing for MoE
+  (block-copy optimization is controlled separately via `--enable-block-copy`, default on)
 - Boolean flags use `argparse.BooleanOptionalAction` (e.g., `--enable-prefix-caching` /
   `--no-enable-prefix-caching`)
 

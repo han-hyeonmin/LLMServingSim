@@ -12,22 +12,9 @@ sidebar_position: 2
 PP is the orthogonal axis to TP: TP shards weights *within* a
 layer, PP shards layers *across* devices. Each GPU runs a
 contiguous stretch of the decoder block stack and hands the
-intermediate activations to the next stage.
-
-LLMServingSim models PP at the **scheduler level**: the scheduler
-keeps an `inflight` list of batches currently traversing the
-pipeline, capped at `pp_size`. When the pipeline is full, the
-scheduler returns `None` until ASTRA-Sim drains a stage. This
-matches how production training frameworks (e.g., Megatron-LM)
-stream micro-batches.
-
-> ⚠️ **Caveat: PP currently affects scheduling only.** The trace
-> generator still emits the full model per iteration, so
-> inter-stage forwarding latency is not modeled in detail. PP
-> scheduling depth prevents over-issuing batches but stage-to-stage
-> activation shipment cost is not yet broken out. Treat PP results
-> as a **lower bound** on real overhead. Tracked for a future
-> release.
+intermediate activations to the next stage. The scheduler caps
+in-flight batches at `pp_size`, and Chakra splits each iteration's
+layer list across stage NPUs with send/recv at the boundaries.
 
 ## Prerequisites
 
@@ -108,18 +95,30 @@ Two things to notice vs. the TP=1 baseline:
 
 ## What's interesting
 
-- **Memory split is real.** Even though forwarding cost isn't
-  modeled in detail, the per-stage weight footprint *is*
-  accurate: PP=2 lets you fit a model that doesn't fit on TP=1.
-  Use this to study capacity, not latency.
+- **Memory split is real.** Each stage holds only its slice of
+  decoder layers, so per-GPU weight + KV-cache footprint shrinks
+  roughly 1/`pp_size`. PP=2 lets you fit a model that doesn't fit
+  on TP=1.
+- **Inter-stage activation shipment is real.** Bumping
+  `link_bw` / `link_latency` in the cluster config visibly moves
+  iteration time, because the send/recv nodes Chakra inserts
+  between stages route through the simulated network just like any
+  other collective. Use this to study how interconnect choice
+  affects PP scaling.
 - **Pipeline depth caps in-flight batches.** `inflight ≤ pp_size`
-  is the only PP-driven scheduling constraint today. With
-  `pp_size=2` and a token budget that allows 6 batches, you'll see
-  the scheduler queue at most 2 batches in the pipeline at once.
-- **No bubble modeling yet.** Real PP suffers from pipeline
-  bubbles (idle stages while the pipeline fills/drains). The
-  current PP path doesn't expose those, so steady-state numbers are
-  optimistic.
+  is the PP-driven scheduling constraint. With `pp_size=2` and a
+  token budget that allows 6 batches, you'll see the scheduler
+  queue at most 2 batches in the pipeline at once. Steady-state
+  pipeline overlap (batch *k+1* on stage 0 while batch *k* is on
+  stage 1) emerges naturally from ASTRA-Sim executing each stage's
+  `.et` file independently.
+- **What's not modeled.** Within a single iteration the batch is
+  a single unit traversing stages in order — there's no
+  micro-batch split *inside* one iteration, and no choice of
+  pipeline schedule (1F1B, interleaved, etc.). The fill/drain
+  bubbles you'd see in those schedules therefore don't appear; the
+  pipelining benefit comes entirely from overlapping consecutive
+  iterations up to `pp_size`.
 
 ## Related examples
 
@@ -135,4 +134,7 @@ Two things to notice vs. the TP=1 baseline:
 - **[Simulator → Parallelism mechanics](/docs/simulator/parallelism-mechanics)**:
   how `num_npus`, `tp_size`, and `pp_size` are validated and
   threaded through the scheduler / trace generator.
-- The PP `inflight` list lives in `serving/core/scheduler.py`.
+- The PP `inflight` list lives in `serving/core/scheduler.py`; the
+  per-stage layer split and send/recv insertion live in
+  `astra-sim/extern/graph_frontend/chakra/src/converter/llm_converter.py`
+  (`convert_common` / `convert_prefill`).
