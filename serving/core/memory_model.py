@@ -421,6 +421,7 @@ class MemoryModel():
             if req.npu_last_node is not None:
                 self.npu_prefix_cache.dec_lock_ref(req.npu_last_node)
             self.npu_prefix_cache.inc_lock_ref(new_last_node)
+            # print(f"[CACHE_UNFINISHED] req={req.id} AFTER: old_node_id={old_node.id}(lock_ref={old_node.lock_ref}) new_node_id={new_last_node.id}(lock_ref={new_last_node.lock_ref})")
             req.npu_last_node = new_last_node
             
             old_node = req.npu_last_node

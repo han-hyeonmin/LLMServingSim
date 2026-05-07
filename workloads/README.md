@@ -110,14 +110,11 @@ executions.
 | `swe-bench-qwen3-30b-a3b-50-sps0.2.jsonl` | 50 | 765 | 15.3 | 0.2 | Qwen3-30B-A3B |
 
 ### Other
-
 | File | Description |
 | --- | --- |
 | `example_trace.jsonl` | Small example trace for quick testing |
 
 ## Generating workloads
-
-### ShareGPT
 
 Workloads are produced via the `generators/` subpackage, which uses the
 target model's tokenizer to populate `input_tok_ids` (so prefix-cache

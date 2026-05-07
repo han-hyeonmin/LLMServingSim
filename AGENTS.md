@@ -356,9 +356,9 @@ arrival time to avoid busy-looping.
 CLI flags follow vLLM naming where applicable:
 - `--dtype` (`float16`, `bfloat16`, `float32`, `int8`) — model weight precision
 - `--skip-prefill` — skip the prefill phase (decode only)
-- `--request-routing-policy` (`LOAD`, `RR`, `RAND`) — request routing across instances
-- `--expert-routing-policy` (`COPY`, `RR`, `RAND`) — expert token routing for MoE
-  (`COPY` enables block copy optimization for faster simulation)
+- `--request-routing-policy` (`LOAD`, `RR`, `RAND`, `CUSTOM`) — request routing across instances
+- `--expert-routing-policy` (`BALANCED`, `RR`, `RAND`, `CUSTOM`) — expert token routing for MoE
+  (block-copy optimization is controlled separately via `--enable-block-copy`, default on)
 - Boolean flags use `argparse.BooleanOptionalAction` (e.g., `--enable-prefix-caching` /
   `--no-enable-prefix-caching`)
 
@@ -482,6 +482,23 @@ These must match the C++ enum in `astra-sim/astra-sim/system/AstraMemoryAPI.hh`.
   - Launched via `scripts/docker-sim.sh`
   - Mounts the repo root at `/app/LLMServingSim`; ASTRA-Sim + Chakra are
     built inside via `scripts/compile.sh` on first use
+
+## README and docs split
+
+The repo has two documentation surfaces with deliberate scope:
+
+- **`README.md`** — minimal front door. About / Getting Started / Publications /
+  Citation only. Logo + link bar (Website / Documentation / Contribute /
+  Contact / Changelog) point everything else out to the website. **Do not
+  re-add detailed content (CLI flag tables, dataset schema, profiler
+  walkthroughs, validation plots, etc.) to the README** — it lives on the
+  website now.
+- **`docs/`** — the public docs site (Docusaurus 3, deployed at
+  `https://llmservingsim.ai`). All long-form content lives here. See
+  `docs/AGENTS.md` for site-specific conventions.
+
+When you add a new feature with user-visible behavior, document it on the
+website (not the README).
 
 ## Commit & Pull Request Guidelines
 

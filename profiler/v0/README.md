@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # llm_profile
+=======
+# llm_profile v0 (Pytorch profiler)
+>>>>>>> upstream/main
 
 A PyTorch-based profiling tool for measuring LLM layer latencies, attention latencies, and
 GPU/system-level power consumption. The outputs are used by LLMServingSim as performance and
