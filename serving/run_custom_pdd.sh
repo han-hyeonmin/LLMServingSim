@@ -16,8 +16,10 @@ conda activate servingsim
 #   serving architecture with different TP scales per pool.
 # ==============================================================================
 
+NUM_REQ=100
+
 python -m serving --cluster-config 'configs/cluster/custom_disaggregated.json' \
-    --dtype float16 --block-size 16 \
+    --block-size 16 \
     --dataset 'workloads/azure_trace_conv_llama.jsonl' \
-    --output 'outputs/custom_pdd_run_all_arrives_at_0.csv' \
-    --num-req 100
+    --output "outputs/custom_pdd_run_req_${NUM_REQ}.csv" \
+    --num-req ${NUM_REQ}
