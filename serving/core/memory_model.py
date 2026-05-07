@@ -416,6 +416,12 @@ class MemoryModel():
         
         if device == Device.NPU:
             new_last_node = self.npu_prefix_cache.cache_unfinished_req(req)
+
+            # npu_last_node may be None on the first chunk before any node is assigned
+            if req.npu_last_node is not None:
+                self.npu_prefix_cache.dec_lock_ref(req.npu_last_node)
+            self.npu_prefix_cache.inc_lock_ref(new_last_node)
+            req.npu_last_node = new_last_node
             
             old_node = req.npu_last_node
             # print(f"[CACHE_UNFINISHED] req={req.id} old_node_id={old_node.id if old_node else None}(lock_ref={old_node.lock_ref if old_node else 'N/A'}) -> new_node_id={new_last_node.id}(lock_ref={new_last_node.lock_ref})")

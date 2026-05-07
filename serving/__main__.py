@@ -172,7 +172,8 @@ def main():
     dtype = args.dtype
     if dtype is None:
         # Peek at cluster config to pick the default model's torch_dtype
-        with open(args.cluster_config, 'r') as _f:
+        cluster_config_abs = os.path.join(cwd, args.cluster_config)
+        with open(cluster_config_abs, "r") as _f:
             _cluster_peek = json.load(_f)
         _first_model = None
         for _inst in _cluster_peek.get('instances', []):
