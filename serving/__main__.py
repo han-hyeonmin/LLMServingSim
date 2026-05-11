@@ -368,6 +368,10 @@ def main():
     total_latency = 0
     req_cnt = 0
 
+    # Per-iteration timeseries log: appended in the heartbeat loop,
+    # flushed to CSV at end of main(). Failures must not abort sim.
+    timeseries_rows = []
+
     # Set Event Handler that loop with INTERVAL time until first request arrive (for all instances)
     first_arival_time = router.get_first_arrival_time()
     if INTERVAL > first_arival_time:
@@ -642,6 +646,43 @@ def main():
                     line += schedulers[inst_id].memory.npu_prefix_cache.format_prefix_info()
                 print_markup(line)
 
+                # Split running into prefill / decode using the same predicate
+                # the scheduler uses internally (req.is_prefill()).
+                try:
+                    running_prefill = 0
+                    running_decode = 0
+                    for _b in schedulers[inst_id].inflight:
+                        for _req in _b.requests:
+                            if _req.is_prefill():
+                                running_prefill += 1
+                            else:
+                                running_decode += 1
+
+                    _pd_type = instances[inst_id].get("pd_type", "unified")
+                    _node_id = -1
+                    for _nid, _inst_ids in (node2inst_mapping or {}).items():
+                        if inst_id in _inst_ids:
+                            _node_id = _nid
+                            break
+
+                    timeseries_rows.append({
+                        "time_ns": int(current),
+                        "time_s": float(current) / FREQ,
+                        "instance_id": int(inst_id),
+                        "pd_type": str(_pd_type),
+                        "node_id": int(_node_id),
+                        "running_total": int(running_reqs),
+                        "running_prefill": int(running_prefill),
+                        "running_decode": int(running_decode),
+                        "waiting": int(waiting_reqs),
+                        "npu_used_mb": float(npu_used_mb),
+                        "npu_util_pct": float(npu_util),
+                    })
+                except Exception as _ts_exc:
+                    # 디버깅: heartbeat마다 떠도 시뮬은 계속, 본 시뮬 정착 후 삭제 가능
+                    print(f"[P1-WARN] timeseries logging failed at t={current}ns "
+                        f"inst={inst_id}: {_ts_exc}")
+
             ######### Per Node Metrics #########
             if node2inst_mapping:
                 num_nodes = len(node2inst_mapping)
@@ -846,7 +887,36 @@ def main():
         print(f"Saving each request's information to output file: {output_file}")
         for i in range(num_instances):
             schedulers[i].save_output(output_file, is_append=False if i == 0 else True)
-    
+
+    # Flush timeseries CSV alongside per-request CSV.
+    if output_file is not None:
+        try:
+            import csv as _csv
+            _ts_path = output_file
+            if _ts_path.endswith(".csv"):
+                _ts_path = _ts_path[:-4] + "_timeseries.csv"
+            else:
+                _ts_path = _ts_path + "_timeseries.csv"
+            _ts_path_full = f"../{_ts_path}"
+
+            _fieldnames = [
+                "time_ns", "time_s", "instance_id", "pd_type", "node_id",
+                "running_total", "running_prefill", "running_decode",
+                "waiting", "npu_used_mb", "npu_util_pct",
+            ]
+            with open(_ts_path_full, "w", newline="") as _f:
+                _writer = _csv.DictWriter(_f, fieldnames=_fieldnames)
+                _writer.writeheader()
+                for _row in timeseries_rows:
+                    _writer.writerow(_row)
+
+            print_markup(
+                f"Per-iteration timeseries saved:                                     "
+                f"{_ts_path} ({len(timeseries_rows)} rows)"
+            )
+        except Exception as _flush_exc:
+            # 디버깅: 저장 실패해도 본 결과(per-request CSV)는 그대로 남음
+            print(f"[P1-WARN] failed to save timeseries CSV: {_flush_exc}")
 
 if __name__ == "__main__": 
     # For simulation time breakdown
