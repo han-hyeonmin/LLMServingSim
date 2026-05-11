@@ -21,5 +21,5 @@ NUM_REQ=100
 python -m serving --cluster-config 'configs/cluster/custom_disaggregated.json' \
     --block-size 16 \
     --dataset 'workloads/azure_trace_conv_llama.jsonl' \
-    --output "outputs/custom_pdd_run_req_${NUM_REQ}.csv" \
-    --num-req ${NUM_REQ}
+    --output "outputs/custom_pdd_run_req_${NUM_REQ}_P1.csv" \
+    --num-reqs ${NUM_REQ}

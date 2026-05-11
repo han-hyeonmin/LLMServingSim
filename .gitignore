@@ -31,6 +31,3 @@ workloads/azure_trace_*.jsonl
 outputs/**/*_concurrent_decode.csv
 outputs/**/*_concurrent_decode.png
 outputs/**/*_decode_events.csv
-
-# Per-instance breakdowns (regeneratable with --instance-filter)
-outputs/**/inst*/
