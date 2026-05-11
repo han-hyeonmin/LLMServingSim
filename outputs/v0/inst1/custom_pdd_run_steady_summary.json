@@ -1,0 +1,47 @@
+{
+  "input_csv": "outputs/v0/custom_pdd_run.csv",
+  "params": {
+    "grid_ms": 100.0,
+    "theta": 0.9,
+    "hysteresis_s": 2.0,
+    "instance_filter": [
+      1
+    ],
+    "strict": true
+  },
+  "self_check": {
+    "n_rows": 100,
+    "n_empty_itl": 0,
+    "n_zero_first_itl": 0,
+    "n_len_mismatch": 0,
+    "n_sum_mismatch": 0,
+    "instance_ids": [
+      0,
+      1
+    ],
+    "rows_per_instance": {
+      "0": 50,
+      "1": 50
+    },
+    "decode_window_s": [
+      0.06435551,
+      60.445437708
+    ]
+  },
+  "window": {
+    "t_start_s": 43.9,
+    "t_end_s": 45.1,
+    "duration_s": 1.300000000000007,
+    "threshold": 13.5,
+    "peak": 15,
+    "mean_concurrent": 14.538461538461538
+  },
+  "metrics": {
+    "decode_tok_per_s": 202.30769230769124,
+    "n_full_requests": 0,
+    "n_partial_requests": 15,
+    "tpot_mean_ms": null,
+    "tpot_p50_ms": null,
+    "tpot_p99_ms": null
+  }
+}
