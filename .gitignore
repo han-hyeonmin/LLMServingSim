@@ -31,3 +31,7 @@ workloads/azure_trace_*.jsonl
 outputs/**/*_concurrent_decode.csv
 outputs/**/*_concurrent_decode.png
 outputs/**/*_decode_events.csv
+
+# Smoke test outputs for P1 patch validation
+# (regenerable; not part of the result set)
+outputs/custom_pdd_run_req_100_P1*
