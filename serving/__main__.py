@@ -679,7 +679,7 @@ def main():
                         "npu_util_pct": float(npu_util),
                     })
                 except Exception as _ts_exc:
-                    # 디버깅: heartbeat마다 떠도 시뮬은 계속, 본 시뮬 정착 후 삭제 가능
+                    # Non-fatal: timeseries logging failure does not interrupt the simulation.
                     print(f"[P1-WARN] timeseries logging failed at t={current}ns "
                         f"inst={inst_id}: {_ts_exc}")
 
@@ -915,7 +915,7 @@ def main():
                 f"{_ts_path} ({len(timeseries_rows)} rows)"
             )
         except Exception as _flush_exc:
-            # 디버깅: 저장 실패해도 본 결과(per-request CSV)는 그대로 남음
+            # Non-fatal: per-request CSV is already saved; only timeseries CSV is affected.
             print(f"[P1-WARN] failed to save timeseries CSV: {_flush_exc}")
 
 if __name__ == "__main__": 
