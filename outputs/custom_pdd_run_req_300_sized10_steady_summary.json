@@ -1,0 +1,40 @@
+{
+  "timeseries_csv": "outputs/custom_pdd_run_req_300_sized10_timeseries.csv",
+  "per_request_csv": "outputs/custom_pdd_run_req_300_sized10.csv",
+  "params": {
+    "theta": 0.9,
+    "hysteresis_s": 2.0,
+    "instance_filter": null
+  },
+  "pool_summary": {
+    "pd_types_seen": [
+      "decode",
+      "prefill"
+    ],
+    "n_decode_instances": 1,
+    "decode_instance_ids": [
+      1
+    ],
+    "n_total_instances": 3
+  },
+  "window": {
+    "t_start_s": 43.000007812,
+    "t_end_s": 96.000639329,
+    "duration_s": 54.000000000000014,
+    "threshold": 9.0,
+    "peak": 10,
+    "mean_concurrent": 9.981481481481481,
+    "mean_waiting": 21.88888888888889
+  },
+  "metrics": {
+    "decode_tok_per_s_avg": 233.84879541030205,
+    "n_full_requests": 198,
+    "n_partial_requests": 19,
+    "tpot_mean_ms": 42.68348470202021,
+    "tpot_p50_ms": 25.083864,
+    "tpot_p99_ms": 187.57708550000044,
+    "ttft_mean_ms": 63.1985659040404,
+    "ttft_p99_ms": 130.62698107
+  },
+  "cross_validation": null
+}

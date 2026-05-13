@@ -35,3 +35,14 @@ outputs/**/*_decode_events.csv
 # Smoke test outputs for P1 patch validation
 # (regenerable; not part of the result set)
 outputs/custom_pdd_run_req_100_P1*
+
+# Simulation raw outputs — regenerable by re-running the simulation
+# Only *_steady_summary.json is committed as the canonical result.
+outputs/custom_pdd_run_req_*.csv
+outputs/custom_pdd_run_req_*.log
+outputs/custom_pdd_run_req_*_timeseries.csv
+outputs/custom_pdd_run_req_*_decode_pool_ts.csv
+outputs/custom_pdd_run_req_*_decode_pool_ts.png
+
+# Root-level simulator log
+sim.log
