@@ -23,13 +23,12 @@ set -euo pipefail
 # ``configs/model/<MODEL>.json`` relative to the LLMServingSim root.
 # The profiler reads model_type from that config to pick an
 # architecture yaml under profiler/models/.
-MODEL="meta-llama/Llama-3.1-8B"
-# MODEL="Qwen/Qwen3-32B"
+# MODEL="meta-llama/Llama-3.1-8B"
+MODEL="Qwen/Qwen3-32B"
 
 # GPU identifier used as an output folder name under ``perf/``.
 # Free-form — pick something meaningful for your hardware.
-# HARDWARE="RTXPRO6000"
-HARDWARE="T-RTX"
+HARDWARE="RTXPRO6000"
 
 # =============================================================================
 # EDIT THESE (OPTIONAL — uncomment and adjust as needed)
@@ -37,7 +36,7 @@ HARDWARE="T-RTX"
 
 # --- TP sweep ---------------------------------------------------------------
 # Comma-separated list; must include 1.
-TP_DEGREES="1,4"
+TP_DEGREES="1,2"
 
 # --- Engine kwargs ----------------------------------------------------------
 # DTYPE is normally inferred from the model config's ``torch_dtype``

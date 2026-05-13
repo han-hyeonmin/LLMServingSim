@@ -172,8 +172,7 @@ def main():
     dtype = args.dtype
     if dtype is None:
         # Peek at cluster config to pick the default model's torch_dtype
-        cluster_config_abs = os.path.join(cwd, args.cluster_config)
-        with open(cluster_config_abs, "r") as _f:
+        with open(args.cluster_config, 'r') as _f:
             _cluster_peek = json.load(_f)
         _first_model = None
         for _inst in _cluster_peek.get('instances', []):
@@ -372,6 +371,7 @@ def main():
     # flushed to CSV at end of main(). Failures must not abort sim.
     timeseries_rows = []
 
+
     # Set Event Handler that loop with INTERVAL time until first request arrive (for all instances)
     first_arival_time = router.get_first_arrival_time()
     if INTERVAL > first_arival_time:
@@ -478,7 +478,7 @@ def main():
                 # group's max_total_len, matching vLLM's CUDA-graph DP padding.
                 logger.debug(f"Instance {instance_id} is idle but DP group {dg} has pending batches. Creating dummy batch for synchronization.")
                 dummy = Batch(schedulers[instance_id].get_batch_id(), instances[instance_id]["model_name"],
-                              1, 1, 0, [1], [], 0, 1, [], [], [1], current, 0)
+                              1, 1, [1], [], 0, 1, [], [], [1], current, 0)
                 dummy.fired.append(sys)
                 dp_pending[dg][instance_id] = (dummy, inst2node_mapping[instance_id])
 
@@ -682,6 +682,7 @@ def main():
                     # Non-fatal: timeseries logging failure does not interrupt the simulation.
                     print(f"[P1-WARN] timeseries logging failed at t={current}ns "
                         f"inst={inst_id}: {_ts_exc}")
+
 
             ######### Per Node Metrics #########
             if node2inst_mapping:
