@@ -36,9 +36,6 @@ class Router:
         self._request_to_session = {}    # request_id -> (session_id, sub_request_index)
         self._next_request_id = 0        # monotonic counter for unique request IDs
 
-        # Prefill-complete requests waiting for decode pool memory
-        self._pending_transfers = []
-
         if self.routing_policy == "RR":
             self._select_instance = self._rr_select
         elif self.routing_policy == "RAND":
@@ -309,49 +306,7 @@ class Router:
                 scheduler.pd_type
             )
 
-    def has_pending_transfers(self):
-        """Check if prefill-complete requests are waiting for decode pool memory."""
-        return bool(self._pending_transfers)
-
-    def _try_add_decode(self, req):
-        """Attempt to place req into a decode instance.
-
-        Returns True on success.  Returns False (without raising) when every
-        decode instance lacks enough free NPU memory for the request's KV cache.
-        """
-        instance_id = self._select_instance(self.decode_instances)
-        sched = self.decode_schedulers[instance_id]
-        kv_size = sched.memory.get_total_kv(req)
-        if sched.memory.npu_used + kv_size > sched.memory.npu_mem:
-            self.logger.warning(
-                "Decode inst %d OOM (need %.1f MB, free %.1f MB) — deferring request %s",
-                sched.instance_id,
-                kv_size / (1024 * 1024),
-                (sched.memory.npu_mem - sched.memory.npu_used) / (1024 * 1024),
-                req[0] if isinstance(req, (list, tuple)) else getattr(req, 'id', '?'),
-            )
-            return False
-        sched.add_decode(req)
-        return True
-
-    def retry_pending_transfers(self):
-        """Try to flush _pending_transfers into the decode pool.
-
-        Called after every decode completion so that newly freed KV blocks can
-        be claimed by requests that were held back earlier.
-        """
-        if not self._pending_transfers:
-            return
-        still_pending = []
-        for req in self._pending_transfers:
-            if not self._try_add_decode(req):
-                still_pending.append(req)
-        self._pending_transfers = still_pending
-
     def transfer_prefill_request(self, requests):
-        # First flush any previously deferred transfers now that the decode
-        # pool may have freed memory since the last call.
-        self.retry_pending_transfers()
         for req in requests:
-            if not self._try_add_decode(req):
-                self._pending_transfers.append(req)
+            instance_id = self._select_instance(self.decode_instances)
+            self.decode_schedulers[instance_id].add_decode(req)
