@@ -23,6 +23,9 @@ bench/results/
 .aider*
 .continue/
 
+# Personal session context (not part of upstream)
+CONTEXT.md
+
 # Ignore generated workload traces
 workloads/azure_trace_*.jsonl
 
