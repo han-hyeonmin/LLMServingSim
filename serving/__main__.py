@@ -25,6 +25,7 @@ from serving.core.config_builder import *
 from serving.core.router import *
 from serving.core.power_model import *
 from serving.core.logger import *
+from serving.core.d2d_contention import D2DContentionModel
 import sys as flush
 
 from pyinstrument import Profiler
@@ -151,6 +152,11 @@ def main():
                         help='KV cache data type: auto (use default profile.csv) or fp8 (use profile_fp8.csv, halves KV cache memory)')
     parser.add_argument('--network-backend', type=str, choices=['analytical', 'ns3'], default='analytical',
                         help='network simulation backend: analytical (fast, default) or ns3 (detailed, WIP)')
+    parser.add_argument('--enable-kv-transfer-delay',
+                        action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help='delay decode request admission by KV transfer time '
+                             '(2 x kv_bytes / link_bw ns). Default off (metrics only).')
 
     args = parser.parse_args()
     
@@ -208,6 +214,7 @@ def main():
     log_interval=args.log_interval
     network_backend = args.network_backend
     kv_cache_dtype = args.kv_cache_dtype
+    enable_kv_transfer_delay = args.enable_kv_transfer_delay
     # ---------------------------------- Extract cluster config -----------------------------------
     cluster = build_cluster_config(astra_sim, args.cluster_config, args.enable_local_offloading, args.enable_attn_offloading)
     num_nodes = cluster["num_nodes"]
@@ -227,6 +234,14 @@ def main():
     power_modeling = cluster["power_modeling"]
     power_configs = cluster["power_configs"]
     pim_models = cluster["pim_models"]
+
+    # D2D link contention model: enabled when both prefill and decode instances exist
+    d2d_model = None
+    if prefill_instance and decode_instance:
+        d2d_model = D2DContentionModel(
+            link_bw_gbps=cluster["link_bw"],         # GB/s = bytes/ns
+            link_latency_ns=cluster["link_latency"],  # ns
+        )
     # ----------------------------------------- Set config -----------------------------------------
     # Automatic network, memory configuration
     # If you want to set more specific information such as latency, look at config.py and each json file
@@ -353,6 +368,7 @@ def main():
     last_end_time = [0 for _ in range(num_instances)]
     last_calc_time = [0 for _ in range(num_instances)]
     waiting_request = [False for _ in range(num_instances)]
+    last_batch_total_len = [0] * num_instances  # D2D contention: total_len of last scheduled batch
 
     # Calculating Simulator's Throughput
     throughput = []
@@ -439,8 +455,22 @@ def main():
         # An instance can span multiple NPUs. Only update end-time when sys is the first NPU of the instance.
         # waiting_request[instance_id] = True means the instance has no batch to run (idle).
         if sys == inst2npu_mapping[instance_id] and not waiting_request[instance_id]:
+            prev_end_time = last_end_time[instance_id]   # capture BEFORE overwrite
             last_end_time[instance_id] = current
             waiting_request[instance_id] = True
+
+            # D2D contention: record decode collective occupying the D2D link
+            if d2d_model is not None and instances[instance_id]["pd_type"] == "decode":
+                inst_cfg = get_config(instances[instance_id]["model_name"])
+                d2d_model.add_decode_collective(
+                    iter_start_ns=prev_end_time,
+                    iter_end_ns=current,
+                    hidden_size=inst_cfg["hidden_size"],
+                    num_layers=inst_cfg["num_hidden_layers"],
+                    tp_size=instances[instance_id]["tp_size"],
+                    total_len=last_batch_total_len[instance_id],
+                    fp_bits=fp,
+                )
 
         # check request is done
         prompt_t, gen_t, finished_reqs = schedulers[instance_id].add_done(id, sys, current)
@@ -459,7 +489,24 @@ def main():
 
         # Add prefill ended requests to decode instance
         if instances[instance_id]["pd_type"] == "prefill" and len(finished_reqs) > 0:
-            router.transfer_prefill_request(finished_reqs)
+            # Compute KV cache bytes per request (bytes, per TP rank)
+            kv_bytes_per_req = {
+                req.id: schedulers[instance_id].memory.get_total_kv(req)
+                for req in finished_reqs
+            }
+            # D2D contention: register KV transfer job at prefill completion
+            if d2d_model is not None:
+                d2d_model.add_kv_transfer(
+                    ready_ns=current,
+                    kv_bytes=sum(kv_bytes_per_req.values()),
+                )
+            router.transfer_prefill_request(
+                finished_reqs,
+                current_ns=current,
+                link_bw_gbps=cluster["link_bw"],
+                kv_bytes_per_req=kv_bytes_per_req,
+                enable_delay=enable_kv_transfer_delay,
+            )
 
         # schedule requests
         new_req = schedulers[instance_id].schedule(current, sys, id)
@@ -535,6 +582,7 @@ def main():
         elif new_req is not None:
             if sys == inst2npu_mapping[instance_id]:  # first NPU of the instance
                 waiting_request[instance_id] = False
+                last_batch_total_len[instance_id] = new_req.total_len  # D2D contention tracking
                 instance = instances[instance_id]
                 dg = inst_dp_group.get(instance_id)
 
@@ -870,6 +918,17 @@ def main():
         # Each node results
         power_model.print_power_summary()
         print_markup(f"Power per {1/RATIO} sec (W): {power_model.power_time_series}")
+        print_rule()
+    # D2D link contention results
+    if d2d_model is not None:
+        stalls = d2d_model.compute_stalls(total_sim_ns=current)
+        print_rule("[sim.tagline]D2D Link Contention Results[/]")
+        print_markup(f"KV transfer jobs:                                                   {stalls['num_kv_jobs']}")
+        print_markup(f"Decode collective ops:                                              {stalls['num_decode_collective_ops']}")
+        print_markup(f"Stall: KV blocked by decode collective (ns):                        {stalls['stall_kv_due_to_decode_collective_ns']}")
+        print_markup(f"Stall: decode collective blocked by KV (ns):                        {stalls['stall_decode_collective_due_to_kv_ns']}")
+        print_markup(f"Stall total (ns):                                                   {stalls['stall_total_ns']}")
+        print_markup(f"Stall ratio (stall_total / total_sim_time):                         {stalls['stall_ratio']:.4f}")
         print_rule()
     # Each instacne results
     for i in range(num_instances):

@@ -1,5 +1,6 @@
 import bisect
 import json
+import math
 import random
 from .logger import get_logger
 
@@ -306,7 +307,24 @@ class Router:
                 scheduler.pd_type
             )
 
-    def transfer_prefill_request(self, requests):
+    def transfer_prefill_request(
+        self,
+        requests,
+        current_ns: int = 0,
+        link_bw_gbps: float = 0.0,
+        kv_bytes_per_req: dict = None,
+        enable_delay: bool = False,
+    ):
+        """Transfer completed-prefill requests to decode instance.
+
+        enable_delay=True: delays arrival by 2-hop KV transfer time
+        (2 x kv_bytes / link_bw_gbps ns), mirroring run.py's prefill->decode gap.
+        """
         for req in requests:
+            if enable_delay and link_bw_gbps > 0 and kv_bytes_per_req:
+                kv = kv_bytes_per_req.get(req.id, 0)
+                if kv > 0:
+                    delay_ns = int(math.ceil(2 * kv / link_bw_gbps))
+                    req.arrival = current_ns + delay_ns
             instance_id = self._select_instance(self.decode_instances)
             self.decode_schedulers[instance_id].add_decode(req)
