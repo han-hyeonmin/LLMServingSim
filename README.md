@@ -1,19 +1,7 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/static/img/llmservingsim_full_primary_dark_transparent.png">
-    <img alt="LLMServingSim" src="docs/static/img/llmservingsim_full_primary_transparent.png" width="70%">
-  </picture>
-</p>
+# LLMServingSim
 
-<h3 align="center">
-A Unified Simulator for Heterogeneous and Disaggregated LLM Serving Infrastructure
-</h3>
-
-<p align="center">
-| <a href="https://llmservingsim.ai"><b>Website</b></a> | <a href="https://llmservingsim.ai/docs/getting-started/overview"><b>Documentation</b></a> | <a href="https://llmservingsim.ai/docs/contributor/welcome"><b>Contribute</b></a> | <a href="https://llmservingsim.ai/contact"><b>Contact</b></a> | <a href="https://llmservingsim.ai/changelog"><b>Changelog</b></a> |
-</p>
-
-We have built an LLMServingSim website to help you get started with the simulator. Please visit [llmservingsim.ai](https://llmservingsim.ai) for documentation, contribution guides, and team contact info.
+> Personal research fork of [casys-kaist/LLMServingSim](https://github.com/casys-kaist/LLMServingSim).
+> For publications, citation, and official documentation see the upstream repo or [llmservingsim.ai](https://llmservingsim.ai).
 
 ## About
 
@@ -32,10 +20,7 @@ LLMServingSim/
 └── astra-sim/              # ASTRA-Sim C++ backend (submodule)
 ```
 
-Each Python module has its own README under the directory; this file
-covers the simulator-side workflow end-to-end. Per-paper artifact
-evaluation scripts live on dedicated branches — see
-[Evaluation](#evaluation) below.
+Each Python module has its own README under the directory.
 
 ## Getting Started
 
@@ -58,53 +43,4 @@ conda env create -f scripts/servingsim.yml
 conda activate servingsim
 conda env create -f scripts/vllm-env.yml
 conda activate vllm-env
-```
-
-## Publications
-
-**ISPASS 2026**  
-*LLMServingSim 2.0: A Unified Simulator for Heterogeneous and Disaggregated LLM Serving Infrastructure*  
-Jaehong Cho<sup>\*</sup>, Hyunmin Choi<sup>\*</sup>, Guseul Heo, Jongse Park (KAIST) [[Paper]]() (To Appear)  
-<sup>\*</sup>Equal contribution  
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18879965.svg)](https://doi.org/10.5281/zenodo.18879965)
-
-**CAL 2025**  
-*LLMServingSim2.0: A Unified Simulator for Heterogeneous Hardware and Serving Techniques in LLM Infrastructure*  
-Jaehong Cho, Hyunmin Choi, Jongse Park (KAIST)  [[Paper]](https://doi.org/10.1109/LCA.2025.3628325)
-
-**IISWC 2024**  
-*LLMServingSim: A HW/SW Co-Simulation Infrastructure for LLM Inference Serving at Scale*  
-Jaehong Cho, Minsu Kim, Hyunmin Choi, Guseul Heo, Jongse Park (KAIST)  [[Paper]](https://doi.org/10.1109/IISWC63097.2024.00012)  
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12803583.svg)](https://doi.org/10.5281/zenodo.12803583)
-
-## Citation
-
-If you use LLMServingSim in your research, please cite:
-
-```bibtex
-@ARTICLE{11224567,
-    author={Cho, Jaehong and Choi, Hyunmin and Park, Jongse},
-    journal={IEEE Computer Architecture Letters},
-    title={{LLMServingSim2.0: A Unified Simulator for Heterogeneous Hardware and Serving
-            Techniques in LLM Infrastructure}},
-    year={2025},
-    volume={24},
-    number={02},
-    pages={361-364},
-    doi={10.1109/LCA.2025.3628325},
-    ISSN={1556-6064},
-    publisher={IEEE Computer Society},
-    address={Los Alamitos, CA, USA},
-    month=jul
-}
-
-@INPROCEEDINGS{10763697,
-    author={Cho, Jaehong and Kim, Minsu and Choi, Hyunmin and Heo, Guseul and Park, Jongse},
-    booktitle={2024 IEEE International Symposium on Workload Characterization (IISWC)},
-    title={{LLMServingSim: A HW/SW Co-Simulation Infrastructure for LLM Inference Serving
-            at Scale}},
-    year={2024},
-    pages={15-29},
-    doi={10.1109/IISWC63097.2024.00012}
-}
 ```
