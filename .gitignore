@@ -47,5 +47,13 @@ outputs/custom_pdd_run_req_*_timeseries.csv
 outputs/custom_pdd_run_req_*_decode_pool_ts.csv
 outputs/custom_pdd_run_req_*_decode_pool_ts.png
 
+# D2D link contention simulation raw outputs — regenerable
+# Only *_steady_summary.json is committed as the canonical result.
+outputs/custom_pdd_d2d_req_*.csv
+outputs/custom_pdd_d2d_req_*.log
+outputs/custom_pdd_d2d_req_*_timeseries.csv
+outputs/custom_pdd_d2d_req_*_decode_pool_ts.csv
+outputs/custom_pdd_d2d_req_*_decode_pool_ts.png
+
 # Root-level simulator log
 sim.log
