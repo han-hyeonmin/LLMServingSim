@@ -55,5 +55,12 @@ outputs/custom_pdd_d2d_req_*_timeseries.csv
 outputs/custom_pdd_d2d_req_*_decode_pool_ts.csv
 outputs/custom_pdd_d2d_req_*_decode_pool_ts.png
 
+# Load scaling experiment raw outputs — regenerable by re-running run_load_scale.sh
+# comparison_summary.json and comparison.png are committed as canonical results.
+outputs/load_scale_exp/scale*.csv
+outputs/load_scale_exp/scale*.log
+outputs/load_scale_exp/scale*_timeseries.csv
+outputs/load_scale_exp/all_runs.log
+
 # Root-level simulator log
 sim.log

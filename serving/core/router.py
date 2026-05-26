@@ -86,7 +86,8 @@ class Router:
     # Request loading and real-time routing
     # -----------------------------------------------------------------------
 
-    def load_requests(self, path, enable_prefix_caching=False, is_init=True):
+    def load_requests(self, path, enable_prefix_caching=False, is_init=True,
+                      arrival_scale=1.0):
         """Load requests from dataset into pending queue (not yet routed).
 
         Supports two JSONL formats:
@@ -96,6 +97,10 @@ class Router:
         For agentic sessions, only the first sub-request is added to the
         pending queue. Subsequent sub-requests are released dynamically
         via notify_request_completed() when predecessors finish.
+
+        arrival_scale: time-interval scaling factor applied to all inter-arrival
+            gaps (relative to the first request).  arrival_scale=0.5 halves all
+            gaps → 2× higher load; arrival_scale=2.0 doubles them → 0.5× load.
         """
         path = f'../{path}'
         self._enable_prefix_caching = enable_prefix_caching
@@ -116,6 +121,13 @@ class Router:
         # Sort pending requests by arrival time (agentic first sub-requests
         # may interleave with flat requests)
         self._pending_requests.sort(key=lambda r: r['arrival_time_ns'])
+
+        # Apply inter-arrival interval scaling.
+        if arrival_scale != 1.0 and self._pending_requests:
+            t0 = self._pending_requests[0]['arrival_time_ns']
+            for req in self._pending_requests:
+                orig = req['arrival_time_ns']
+                req['arrival_time_ns'] = int(t0 + arrival_scale * (orig - t0))
 
         self.logger.info("Loaded %d requests into pending queue "
                          "(%d agentic sessions deferred)",

@@ -157,6 +157,10 @@ def main():
                         default=False,
                         help='delay decode request admission by KV transfer time '
                              '(2 x kv_bytes / link_bw ns). Default off (metrics only).')
+    parser.add_argument('--load-scale', type=float, default=1.0,
+                        help='inter-arrival time interval scaling factor. '
+                             '0.5 halves all gaps (2x higher load); '
+                             '2.0 doubles them (0.5x load). Default: 1.0 (no scaling)')
 
     args = parser.parse_args()
     
@@ -178,7 +182,9 @@ def main():
     dtype = args.dtype
     if dtype is None:
         # Peek at cluster config to pick the default model's torch_dtype
-        with open(args.cluster_config, 'r') as _f:
+        # cwd was captured before os.chdir(astra_sim), so build abs path here
+        cluster_config_abs = os.path.join(cwd, args.cluster_config)
+        with open(cluster_config_abs, 'r') as _f:
             _cluster_peek = json.load(_f)
         _first_model = None
         for _inst in _cluster_peek.get('instances', []):
@@ -215,6 +221,7 @@ def main():
     network_backend = args.network_backend
     kv_cache_dtype = args.kv_cache_dtype
     enable_kv_transfer_delay = args.enable_kv_transfer_delay
+    load_scale = args.load_scale
     # ---------------------------------- Extract cluster config -----------------------------------
     cluster = build_cluster_config(astra_sim, args.cluster_config, args.enable_local_offloading, args.enable_attn_offloading)
     num_nodes = cluster["num_nodes"]
@@ -350,7 +357,8 @@ def main():
         power_model = None
     # Load requests into router (routed in real-time during simulation)
     if dataset != None:
-        router.load_requests(dataset, enable_prefix_caching=enable_prefix_caching, is_init=is_init)
+        router.load_requests(dataset, enable_prefix_caching=enable_prefix_caching, is_init=is_init,
+                             arrival_scale=load_scale)
     else:
         # Manually adding request (legacy: route all upfront)
         for i in range(16):
