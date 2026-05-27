@@ -3,6 +3,31 @@
 All notable changes to this project are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
+## [Unreleased]
+
+### Added
+- `--load-scale` CLI flag (`serving/__main__.py`, `serving/core/router.py`) for
+  inter-arrival interval scaling. A value below 1.0 compresses gaps (higher load);
+  above 1.0 expands them (lower load). Default 1.0 (no scaling). Scaling is applied
+  after sorting by setting `arrival_i' = t0 + scale × (arrival_i − t0)`.
+- D2D (decode-to-decode) link contention model for disaggregated serving: models
+  bandwidth contention on the KV-transfer link between prefill and decode pools,
+  parameterised by `d2d_bw_gbps` in the cluster config.
+- Load-scaling sweep scripts (`experiments/run_load_scale.sh`,
+  `experiments/plot_load_scale.py`): sweeps scale factors {0.25, 0.5, 1.0, 2.0, 4.0}
+  on the disaggregated config (300 req, `max_num_seqs=10`) and emits a 6-panel
+  comparison figure plus `outputs/load_scale_exp/comparison_summary.json`.
+
+### Fixed
+- Cluster config path now resolved against the original working directory before
+  `os.chdir('astra-sim/')` in `serving/__main__.py` (upstream-merge regression: relative
+  path broke after the cwd change).
+- `npu_last_node` None guard restored in `memory_model.py` `cache_unfinished_req()`
+  (upstream-merge regression: removed guard caused `AttributeError` on the first
+  prefill chunk before any radix node was assigned to the request).
+
+---
+
 ## [v1.1.0] - 2026-04-26
 
 ### Added

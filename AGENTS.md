@@ -356,6 +356,9 @@ arrival time to avoid busy-looping.
 CLI flags follow vLLM naming where applicable:
 - `--dtype` (`float16`, `bfloat16`, `float32`, `int8`) — model weight precision
 - `--skip-prefill` — skip the prefill phase (decode only)
+- `--load-scale` (float, default 1.0) — inter-arrival interval scaling factor.
+  Values < 1.0 compress gaps (higher load); > 1.0 expand them (lower load).
+  Scaling is `arrival_i' = t0 + scale × (arrival_i − t0)` applied after loading.
 - `--request-routing-policy` (`LOAD`, `RR`, `RAND`, `CUSTOM`) — request routing across instances
 - `--expert-routing-policy` (`BALANCED`, `RR`, `RAND`, `CUSTOM`) — expert token routing for MoE
   (block-copy optimization is controlled separately via `--enable-block-copy`, default on)
