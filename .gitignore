@@ -64,3 +64,4 @@ outputs/load_scale_exp/all_runs.log
 
 # Root-level simulator log
 sim.log
+outputs/load_scale_exp/comparison.png
