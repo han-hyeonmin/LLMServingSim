@@ -19,6 +19,11 @@ class Request:
         self.itl = []
         self.recent_end = 0
 
+        # D2D link contention (set post-hoc by D2DContentionModel attribution;
+        # -1 means not applicable, e.g. non-disaggregated runs)
+        self.d2d_stall_ns = -1
+        self.d2d_stall_ratio = -1
+
         # For chunked prefill
         self.chunk_len = 0  # tokens scheduled for this request in the current step
 

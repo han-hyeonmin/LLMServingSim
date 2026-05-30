@@ -10,6 +10,7 @@ import os
 import subprocess
 import argparse
 import json
+import math
 from time import time
 from collections import defaultdict
 
@@ -930,6 +931,34 @@ def main():
     # D2D link contention results
     if d2d_model is not None:
         stalls = d2d_model.compute_stalls(total_sim_ns=current)
+
+        # Per-request stall attribution: charge each decode request the stall of
+        # the iteration windows overlapping its decode lifetime [arrival, end_time].
+        decode_reqs = []
+        for i in range(num_instances):
+            if instances[i]["pd_type"] == "decode":
+                for req in schedulers[i].done:
+                    decode_reqs.append((req.id, req.arrival, req.end_time))
+        stall_map = d2d_model.attribute_per_request(decode_reqs)
+
+        per_req_ratios = []
+        for i in range(num_instances):
+            if instances[i]["pd_type"] != "decode":
+                continue
+            for req in schedulers[i].done:
+                s_ns = stall_map.get(req.id, 0)
+                req.d2d_stall_ns = s_ns
+                req.d2d_stall_ratio = (s_ns / req.latency) if req.latency > 0 else 0.0
+                per_req_ratios.append(req.d2d_stall_ratio)
+
+        # p99 of per-request stall ratio (fraction); reported as percent below.
+        if per_req_ratios:
+            ordered = sorted(per_req_ratios)
+            idx = max(0, math.ceil(0.99 * len(ordered)) - 1)
+            stall_ratio_p99 = ordered[idx]
+        else:
+            stall_ratio_p99 = 0.0
+
         print_rule("[sim.tagline]D2D Link Contention Results[/]")
         print_markup(f"KV transfer jobs:                                                   {stalls['num_kv_jobs']}")
         print_markup(f"Decode collective ops:                                              {stalls['num_decode_collective_ops']}")
@@ -937,6 +966,7 @@ def main():
         print_markup(f"Stall: decode collective blocked by KV (ns):                        {stalls['stall_decode_collective_due_to_kv_ns']}")
         print_markup(f"Stall total (ns):                                                   {stalls['stall_total_ns']}")
         print_markup(f"Stall ratio (stall_total / total_sim_time):                         {stalls['stall_ratio']:.4f}")
+        print_markup(f"Stall ratio p99 (per-request stall / decode time):                  {stall_ratio_p99 * 100:.2f} %")
         print_rule()
     # Each instacne results
     for i in range(num_instances):

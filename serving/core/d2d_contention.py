@@ -12,6 +12,7 @@ Units: nanoseconds (ns), bytes, GB/s (= bytes/ns numerically).
 
 from __future__ import annotations
 
+import bisect
 import heapq
 import math
 from typing import Optional
@@ -41,6 +42,13 @@ class D2DContentionModel:
         # Accumulated stall counters
         self.stall_kv:          int = 0   # ns blocked by collective
         self.stall_collective:  int = 0   # ns blocked by KV
+
+        # Per-iteration stall events for per-request attribution:
+        #   (iter_start_ns, iter_end_ns, stall_delta_ns)
+        # The stall delta captures ALL stall (kv-side + collective-side) incurred
+        # during one decode iteration's window. Requests whose decode lifetime
+        # overlaps this window are charged this stall (see attribute_per_request).
+        self._stall_events: list = []
 
         # Diagnostics
         self._n_kv_jobs:   int = 0
@@ -85,6 +93,10 @@ class D2DContentionModel:
         if tp_size <= 1:
             return   # no D2D collective; no contention from this side
 
+        # Snapshot stall counters to capture this iteration's stall delta
+        before_kv   = self.stall_kv
+        before_coll = self.stall_collective
+
         collective_dur_ns = self._collective_dur_ns(
             hidden_size, num_layers, tp_size, total_len, fp_bits
         )
@@ -103,6 +115,12 @@ class D2DContentionModel:
         self._d2d_avail = actual_start + int(collective_dur_ns)
         self._last_kind = 'collective'
         self._n_coll_ops += 1
+
+        # Record this iteration's stall delta against its time window so that
+        # per-request attribution can charge it to the requests alive then.
+        delta = (self.stall_kv - before_kv) + (self.stall_collective - before_coll)
+        if delta > 0:
+            self._stall_events.append((iter_start_ns, iter_end_ns, delta))
 
     # ------------------------------------------------------------------
     # Final stall computation
@@ -123,6 +141,47 @@ class D2DContentionModel:
             "num_kv_jobs":                            self._n_kv_jobs,
             "num_decode_collective_ops":              self._n_coll_ops,
         }
+
+    def attribute_per_request(self, requests: list) -> dict:
+        """Attribute per-iteration stall to individual decode requests.
+
+        requests: list of (req_id, decode_start_ns, decode_end_ns).
+
+        A request is charged the stall of every iteration window that overlaps
+        its decode lifetime [decode_start, decode_end]. Because concurrently
+        decoding requests share the same iteration windows, the per-request
+        stalls overlap and their sum exceeds the global (non-overlapping)
+        stall_total. This is intentional: each value is the stall *experienced*
+        by that request, mirroring the reference per-request table.
+
+        Implementation: events are appended in time order (decode iterations are
+        processed chronologically), so we build a prefix sum over event end
+        times and use bisect for O(log N) range queries per request.
+        """
+        if not self._stall_events:
+            return {rid: 0 for rid, _, _ in requests}
+
+        # events already in chronological order; both starts and ends ascending
+        starts = [s for (s, _e, _d) in self._stall_events]
+        ends   = [e for (_s, e, _d) in self._stall_events]
+
+        # For overlap [s, e] not (e < ds or s > de):
+        #   keep events with iter_end_ns >= decode_start AND iter_start_ns <= decode_end.
+        # Exact two-sided overlap needs per-request scan; events are few (one per
+        # decode iteration), so a linear scan stays cheap. Use bisect to prune by
+        # end >= decode_start, then filter the tail by start <= decode_end.
+        out = {}
+        for rid, ds, de in requests:
+            # first event whose end >= ds
+            lo = bisect.bisect_left(ends, ds)
+            total = 0
+            for i in range(lo, len(self._stall_events)):
+                s_i = starts[i]
+                if s_i > de:
+                    break  # remaining events start after decode_end (ends sorted ⇒ starts ascending here too in practice)
+                total += self._stall_events[i][2]
+            out[rid] = total
+        return out
 
     # ------------------------------------------------------------------
     # Internal helpers
