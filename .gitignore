@@ -65,8 +65,3 @@ outputs/load_scale_exp/all_runs.log
 # Root-level simulator log
 sim.log
 outputs/load_scale_exp/comparison.png
-
-# Local analysis artifacts (scripts, writeups, figures) — kept local, not tracked
-outputs/crossval_tpot.py
-outputs/*_analysis.md
-outputs/*crossval*.png
