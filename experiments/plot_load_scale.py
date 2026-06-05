@@ -274,49 +274,61 @@ def main():
 
     ax_tpot   = fig.add_subplot(gs[0, 0])
     ax_ttft   = fig.add_subplot(gs[0, 1])
-    ax_lat    = fig.add_subplot(gs[0, 2])
+    ax_norm   = fig.add_subplot(gs[0, 2])
     ax_cdf    = fig.add_subplot(gs[1, :2])
     ax_ttft_cdf = fig.add_subplot(gs[1, 2])
     ax_ts     = fig.add_subplot(gs[2, :])
 
-    # ---------- Panel 1: TPOT mean + p99 vs load factor ----------
+    # ---------- Panel 1: TPOT mean + p99 vs load factor (log-log) ----------
     tpot_means = [results[s]["metrics"]["tpot_mean_ms"] for s in valid_scales]
     tpot_p99s  = [results[s]["metrics"]["tpot_p99_ms"]  for s in valid_scales]
     ax_tpot.plot(load_factors, tpot_means, "o-", color="steelblue", label="mean", lw=1.8)
     ax_tpot.plot(load_factors, tpot_p99s,  "s--", color="steelblue", label="p99", alpha=0.65, lw=1.5)
     ax_tpot.set_xscale("log")
+    ax_tpot.set_yscale("log")
     ax_tpot.set_xlabel("Load factor (1 / time-scale)")
     ax_tpot.set_ylabel("TPOT (ms)")
-    ax_tpot.set_title("TPOT vs Load")
+    ax_tpot.set_title("TPOT vs Load  [log–log]")
     ax_tpot.legend(fontsize=8)
-    ax_tpot.grid(True, alpha=0.3)
+    ax_tpot.grid(True, which="both", alpha=0.3)
     _annotate_scales(ax_tpot, load_factors, tpot_means, valid_scales)
 
-    # ---------- Panel 2: TTFT mean + p99 vs load factor ----------
+    # ---------- Panel 2: TTFT mean + p99 vs load factor (log-log) ----------
     ttft_means = [results[s]["metrics"]["ttft_mean_ms"] for s in valid_scales]
     ttft_p99s  = [results[s]["metrics"]["ttft_p99_ms"]  for s in valid_scales]
     ax_ttft.plot(load_factors, ttft_means, "o-", color="darkorange", label="mean", lw=1.8)
     ax_ttft.plot(load_factors, ttft_p99s,  "s--", color="darkorange", label="p99", alpha=0.65, lw=1.5)
     ax_ttft.set_xscale("log")
+    ax_ttft.set_yscale("log")
     ax_ttft.set_xlabel("Load factor (1 / time-scale)")
     ax_ttft.set_ylabel("TTFT (ms)")
-    ax_ttft.set_title("TTFT vs Load")
+    ax_ttft.set_title("TTFT vs Load  [log–log]")
     ax_ttft.legend(fontsize=8)
-    ax_ttft.grid(True, alpha=0.3)
+    ax_ttft.grid(True, which="both", alpha=0.3)
     _annotate_scales(ax_ttft, load_factors, ttft_means, valid_scales)
 
-    # ---------- Panel 3: E2E latency vs load factor ----------
-    lat_means = [results[s]["metrics"]["lat_mean_ms"] for s in valid_scales]
-    lat_p99s  = [results[s]["metrics"]["lat_p99_ms"]  for s in valid_scales]
-    ax_lat.plot(load_factors, lat_means, "o-", color="forestgreen", label="mean", lw=1.8)
-    ax_lat.plot(load_factors, lat_p99s,  "s--", color="forestgreen", label="p99", alpha=0.65, lw=1.5)
-    ax_lat.set_xscale("log")
-    ax_lat.set_xlabel("Load factor (1 / time-scale)")
-    ax_lat.set_ylabel("E2E Latency (ms)")
-    ax_lat.set_title("E2E Latency vs Load")
-    ax_lat.legend(fontsize=8)
-    ax_lat.grid(True, alpha=0.3)
-    _annotate_scales(ax_lat, load_factors, lat_means, valid_scales)
+    # ---------- Panel 3: Normalized comparison — TTFT vs TPOT on same log-log axes ----------
+    # Normalize each series by its value at the lowest load factor so both start at 1.
+    # The log-log slope directly shows how sensitively each metric reacts to load.
+    norm_base_tpot = tpot_means[0] if tpot_means[0] > 0 else 1.0
+    norm_base_ttft = ttft_means[0] if ttft_means[0] > 0 else 1.0
+    tpot_norm = [v / norm_base_tpot for v in tpot_means]
+    ttft_norm = [v / norm_base_ttft for v in ttft_means]
+    tpot_p99_norm = [v / norm_base_tpot for v in tpot_p99s]
+    ttft_p99_norm = [v / norm_base_ttft for v in ttft_p99s]
+
+    ax_norm.plot(load_factors, tpot_norm, "o-",  color="steelblue",  label="TPOT mean", lw=1.8)
+    ax_norm.plot(load_factors, tpot_p99_norm, "s--", color="steelblue",  label="TPOT p99", alpha=0.65, lw=1.5)
+    ax_norm.plot(load_factors, ttft_norm, "o-",  color="darkorange", label="TTFT mean", lw=1.8)
+    ax_norm.plot(load_factors, ttft_p99_norm, "s--", color="darkorange", label="TTFT p99", alpha=0.65, lw=1.5)
+    ax_norm.axhline(1.0, color="gray", lw=0.8, ls=":")
+    ax_norm.set_xscale("log")
+    ax_norm.set_yscale("log")
+    ax_norm.set_xlabel("Load factor (1 / time-scale)")
+    ax_norm.set_ylabel("Normalized latency (÷ low-load baseline)")
+    ax_norm.set_title("TTFT vs TPOT sensitivity  [log–log]\n(slope = load sensitivity)")
+    ax_norm.legend(fontsize=8)
+    ax_norm.grid(True, which="both", alpha=0.3)
 
     # ---------- Panel 4: TPOT CDF across scales ----------
     for sc, color in zip(valid_scales, COLORS):
